@@ -10,7 +10,6 @@ import {
   NavLink,
   Stack,
   Text,
-  Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
@@ -166,9 +165,12 @@ export default function AppLayout() {
       <AppShell.Main>
         <Box className="rb-header" h={100}>
           <Container size="xl" h="100%">
-            <Title order={1} c="white" lh="100px" fz={{ base: 26, sm: 38 }}>
-              Maximus Stampers
-            </Title>
+            <Box
+              h="100%"
+              style={{ display: "flex", alignItems: "center" }}
+            >
+              <BrandLogo variant="light" layout="banner" height={54} />
+            </Box>
           </Container>
         </Box>
         <Container size="xl" py="lg">

@@ -13,7 +13,7 @@ export default function BrandLogo({
   height = 30,
 }: {
   variant?: "light" | "dark";
-  layout?: "inline" | "stacked";
+  layout?: "inline" | "stacked" | "banner";
   height?: number;
 }) {
   const color = variant === "light" ? "#fff" : "#1a1a1a";
@@ -41,6 +41,33 @@ export default function BrandLogo({
           Routeboek
         </Text>
       </Stack>
+    );
+  }
+
+  if (layout === "banner") {
+    return (
+      <Box style={{ display: "flex", alignItems: "center", gap: height * 0.4 }}>
+        <Image
+          src="/brand/stampers-logo.png"
+          alt="Maximus Stampers"
+          h={height}
+          w="auto"
+          fit="contain"
+          style={{
+            filter: variant === "light" ? "brightness(0) invert(1)" : "brightness(0)",
+          }}
+        />
+        <Text
+          c={color}
+          fw={700}
+          fz={height * 0.42}
+          lh={1}
+          tt="uppercase"
+          style={{ letterSpacing: "0.3em", marginRight: "-0.3em" }}
+        >
+          Routeboek
+        </Text>
+      </Box>
     );
   }
 
