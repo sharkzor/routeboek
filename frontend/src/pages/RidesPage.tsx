@@ -74,7 +74,9 @@ export default function RidesPage() {
       setRides(scope === "past" ? [...response].reverse() : response);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Ritten laden is mislukt.");
+      setError(
+        err instanceof ApiError ? err.message : "Ritten laden is mislukt.",
+      );
     }
   }, [scope]);
 
@@ -86,7 +88,9 @@ export default function RidesPage() {
     try {
       const updated = await action();
       setRides((current) =>
-        current ? current.map((ride) => (ride.id === updated.id ? updated : ride)) : current,
+        current
+          ? current.map((ride) => (ride.id === updated.id ? updated : ride))
+          : current,
       );
       notifications.show({ message, color: "green" });
     } catch (err) {
@@ -100,11 +104,14 @@ export default function RidesPage() {
   const remove = async (ride: Ride) => {
     try {
       await api.deleteRide(ride.id);
-      setRides((current) => current?.filter((item) => item.id !== ride.id) ?? null);
+      setRides(
+        (current) => current?.filter((item) => item.id !== ride.id) ?? null,
+      );
       notifications.show({ message: "De rit is verwijderd.", color: "green" });
     } catch (err) {
       notifications.show({
-        message: err instanceof ApiError ? err.message : "Verwijderen is mislukt.",
+        message:
+          err instanceof ApiError ? err.message : "Verwijderen is mislukt.",
         color: "red",
       });
     }
@@ -154,7 +161,11 @@ export default function RidesPage() {
         <Card withBorder radius="md" p="xl">
           <Stack align="center" gap="xs">
             <Text c="dimmed">Er staan nog geen ritten gepland.</Text>
-            <Button variant="light" color="routeboek" onClick={() => navigate("/ritten/nieuw")}>
+            <Button
+              variant="light"
+              color="routeboek"
+              onClick={() => navigate("/ritten/nieuw")}
+            >
               Organiseer de eerste rit
             </Button>
           </Stack>
@@ -167,191 +178,248 @@ export default function RidesPage() {
             return (
               <Card key={ride.id} withBorder radius="md" p="lg">
                 <Group justify="space-between" align="flex-start" wrap="nowrap">
-                  {ride.route && (
-                    <Link to={`/routes/${ride.route.id}`} style={{ flexShrink: 0 }}>
-                      <Image
-                        src={ride.route.map_url ?? "/brand/map-pattern.png"}
-                        alt={`Kaart van ${ride.route.name}`}
-                        className="rb-ride-thumb"
-                        fallbackSrc="/brand/map-pattern.png"
-                      />
-                    </Link>
-                  )}
-                  <Stack gap={8} style={{ minWidth: 0, flex: 1 }}>
-                    <Group gap={8} wrap="wrap">
-                      <Text fw={700} fz="lg">
-                        {ride.name}
-                      </Text>
-                      <Badge variant="light" color="routeboek">
-                        {RIDE_TYPE_LABELS[ride.ride_type]}
-                      </Badge>
-                      {ride.is_private && (
-                        <Badge variant="light" color="gray" leftSection={<IconLock size={12} />}>
-                          Privé
-                        </Badge>
-                      )}
-                      {past && (
-                        <Badge variant="outline" color="gray">
-                          Geweest
-                        </Badge>
-                      )}
-                    </Group>
-
-                    <Group gap="lg" wrap="wrap">
-                      <Group gap={6}>
-                        <IconClock size={16} color="var(--rb-red)" />
-                        <Text size="sm">{formatRideMoment(ride)}</Text>
-                      </Group>
-                      {ride.route && (
-                        <Group gap={6}>
-                          <IconMapPin size={16} color="var(--rb-red)" />
-                          <Text
-                            size="sm"
-                            component={Link}
-                            to={`/routes/${ride.route.id}`}
-                            c="routeboek.6"
-                          >
-                            {ride.route.name}
-                          </Text>
-                        </Group>
-                      )}
-                      <Group gap={6}>
-                        <IconUsers size={16} color="var(--rb-red)" />
-                        <Text size="sm">
-                          {ride.participant_count} / {ride.max_participants}
-                        </Text>
-                      </Group>
-                    </Group>
-
-                    <Text size="sm" c="dimmed">
-                      Wegkapitein: {ride.owner.display_name}
-                      {ride.distance_km !== null && ` · ${ride.distance_km.toFixed(0)} km`}
-                      {ride.speed_kmh !== null && ` · ${ride.speed_kmh.toFixed(0)} km/u`}
-                    </Text>
-
-                    {ride.notes_html && (
-                      <Text size="sm" className="rb-description" lineClamp={3}>
-                        {ride.notes_html}
-                      </Text>
-                    )}
-
-                    <Group gap={6} mt={4}>
-                      <UnstyledButton
-                        onClick={() => toggleExpanded(ride.id)}
-                        style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  <Group
+                    align="flex-start"
+                    wrap="nowrap"
+                    gap="md"
+                    style={{ minWidth: 0, flex: 1 }}
+                  >
+                    {ride.route && (
+                      <Link
+                        to={`/routes/${ride.route.id}`}
+                        style={{ flexShrink: 0 }}
                       >
-                        <Avatar.Group spacing="sm">
-                          {ride.participants.slice(0, 8).map((participant) => (
-                            <Tooltip key={participant.id} label={participant.display_name}>
-                              <Avatar size="sm" color="routeboek" radius="xl">
-                                {participant.display_name.slice(0, 2).toUpperCase()}
-                              </Avatar>
-                            </Tooltip>
-                          ))}
-                        </Avatar.Group>
-                        {ride.participant_count > 8 && (
-                          <Text size="xs" c="dimmed">
-                            +{ride.participant_count - 8}
-                          </Text>
+                        <Image
+                          src={ride.route.map_url ?? "/brand/map-pattern.png"}
+                          alt={`Kaart van ${ride.route.name}`}
+                          className="rb-ride-thumb"
+                          fallbackSrc="/brand/map-pattern.png"
+                        />
+                      </Link>
+                    )}
+                    <Stack gap={8} style={{ minWidth: 0, flex: 1 }}>
+                      <Group gap={8} wrap="wrap">
+                        <Text fw={700} fz="lg">
+                          {ride.name}
+                        </Text>
+                        <Badge variant="light" color="routeboek">
+                          {RIDE_TYPE_LABELS[ride.ride_type]}
+                        </Badge>
+                        {ride.is_private && (
+                          <Badge
+                            variant="light"
+                            color="gray"
+                            leftSection={<IconLock size={12} />}
+                          >
+                            Privé
+                          </Badge>
                         )}
-                        {ride.participant_count > 0 && (
-                          <Group gap={2} c="routeboek.6">
-                            <Text size="xs" fw={600}>
-                              {expanded.has(ride.id) ? "Verberg deelnemers" : "Wie gaan er mee?"}
+                        {past && (
+                          <Badge variant="outline" color="gray">
+                            Geweest
+                          </Badge>
+                        )}
+                      </Group>
+
+                      <Group gap="lg" wrap="wrap">
+                        <Group gap={6}>
+                          <IconClock size={16} color="var(--rb-red)" />
+                          <Text size="sm">{formatRideMoment(ride)}</Text>
+                        </Group>
+                        {ride.route && (
+                          <Group gap={6}>
+                            <IconMapPin size={16} color="var(--rb-red)" />
+                            <Text
+                              size="sm"
+                              component={Link}
+                              to={`/routes/${ride.route.id}`}
+                              c="routeboek.6"
+                            >
+                              {ride.route.name}
                             </Text>
-                            {expanded.has(ride.id) ? (
-                              <IconChevronUp size={14} />
-                            ) : (
-                              <IconChevronDown size={14} />
-                            )}
                           </Group>
                         )}
-                      </UnstyledButton>
-                    </Group>
+                        <Group gap={6}>
+                          <IconUsers size={16} color="var(--rb-red)" />
+                          <Text size="sm">
+                            {ride.participant_count} / {ride.max_participants}
+                          </Text>
+                        </Group>
+                      </Group>
 
-                    <Collapse expanded={expanded.has(ride.id)}>
-                      {ride.participant_count === 0 ? (
-                        <Text size="sm" c="dimmed">
-                          Nog geen aanmeldingen.
+                      <Text size="sm" c="dimmed">
+                        Wegkapitein: {ride.owner.display_name}
+                        {ride.distance_km !== null &&
+                          ` · ${ride.distance_km.toFixed(0)} km`}
+                        {ride.speed_kmh !== null &&
+                          ` · ${ride.speed_kmh.toFixed(0)} km/u`}
+                      </Text>
+
+                      {ride.notes_html && (
+                        <Text
+                          size="sm"
+                          className="rb-description"
+                          lineClamp={3}
+                        >
+                          {ride.notes_html}
                         </Text>
-                      ) : (
-                        <List size="sm" spacing={4} mt={4}>
-                          {ride.participants.map((participant) => (
-                            <List.Item
-                              key={participant.id}
-                              icon={
-                                <Avatar size={20} color="routeboek" radius="xl">
-                                  {participant.display_name.slice(0, 2).toUpperCase()}
-                                </Avatar>
-                              }
-                            >
-                              {participant.display_name}
-                              {participant.id === ride.owner.id && (
-                                <Text span size="xs" c="dimmed">
-                                  {" "}
-                                  (wegkapitein)
-                                </Text>
-                              )}
-                            </List.Item>
-                          ))}
-                        </List>
                       )}
-                    </Collapse>
-                  </Stack>
 
-                  <Stack gap="xs" align="flex-end" style={{ flexShrink: 0 }}>
-                    {!past &&
-                      (ride.is_joined ? (
-                        <Button
-                          variant="light"
+                      <Group gap={6} mt={4}>
+                        <UnstyledButton
+                          onClick={() => toggleExpanded(ride.id)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <Avatar.Group spacing="sm">
+                            {ride.participants
+                              .slice(0, 8)
+                              .map((participant) => (
+                                <Tooltip
+                                  key={participant.id}
+                                  label={participant.display_name}
+                                >
+                                  <Avatar
+                                    size="sm"
+                                    color="routeboek"
+                                    radius="xl"
+                                  >
+                                    {participant.display_name
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </Avatar>
+                                </Tooltip>
+                              ))}
+                          </Avatar.Group>
+                          {ride.participant_count > 8 && (
+                            <Text size="xs" c="dimmed">
+                              +{ride.participant_count - 8}
+                            </Text>
+                          )}
+                          {ride.participant_count > 0 && (
+                            <Group gap={2} c="routeboek.6">
+                              <Text size="xs" fw={600}>
+                                {expanded.has(ride.id)
+                                  ? "Verberg deelnemers"
+                                  : "Wie gaan er mee?"}
+                              </Text>
+                              {expanded.has(ride.id) ? (
+                                <IconChevronUp size={14} />
+                              ) : (
+                                <IconChevronDown size={14} />
+                              )}
+                            </Group>
+                          )}
+                        </UnstyledButton>
+                      </Group>
+
+                      <Collapse expanded={expanded.has(ride.id)}>
+                        {ride.participant_count === 0 ? (
+                          <Text size="sm" c="dimmed">
+                            Nog geen aanmeldingen.
+                          </Text>
+                        ) : (
+                          <List size="sm" spacing={4} mt={4}>
+                            {ride.participants.map((participant) => (
+                              <List.Item
+                                key={participant.id}
+                                icon={
+                                  <Avatar
+                                    size={20}
+                                    color="routeboek"
+                                    radius="xl"
+                                  >
+                                    {participant.display_name
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </Avatar>
+                                }
+                              >
+                                {participant.display_name}
+                                {participant.id === ride.owner.id && (
+                                  <Text span size="xs" c="dimmed">
+                                    {" "}
+                                    (wegkapitein)
+                                  </Text>
+                                )}
+                              </List.Item>
+                            ))}
+                          </List>
+                        )}
+                      </Collapse>
+                    </Stack>
+                  </Group>
+
+                  {ride.can_edit && (
+                    <Menu position="bottom-end" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
                           color="gray"
-                          size="sm"
-                          disabled={ride.owner.id === user?.id}
+                          aria-label="Meer acties"
+                          style={{ flexShrink: 0 }}
+                        >
+                          <IconDots size={18} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<IconPencil size={16} />}
                           onClick={() =>
-                            void mutate(() => api.leaveRide(ride.id), "Je bent afgemeld.")
+                            navigate(`/ritten/${ride.id}/bewerken`)
                           }
                         >
-                          Afmelden
-                        </Button>
-                      ) : (
-                        <Button
-                          color="routeboek"
-                          size="sm"
-                          disabled={full}
-                          onClick={() =>
-                            void mutate(() => api.joinRide(ride.id), "Je bent aangemeld.")
-                          }
+                          Bewerken
+                        </Menu.Item>
+                        <Menu.Item
+                          color="red"
+                          leftSection={<IconTrash size={16} />}
+                          onClick={() => void remove(ride)}
                         >
-                          {full ? "Vol" : "Aanmelden"}
-                        </Button>
-                      ))}
-
-                    {ride.can_edit && (
-                      <Menu position="bottom-end" withinPortal>
-                        <Menu.Target>
-                          <ActionIcon variant="subtle" color="gray" aria-label="Meer acties">
-                            <IconDots size={18} />
-                          </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Item
-                            leftSection={<IconPencil size={16} />}
-                            onClick={() => navigate(`/ritten/${ride.id}/bewerken`)}
-                          >
-                            Bewerken
-                          </Menu.Item>
-                          <Menu.Item
-                            color="red"
-                            leftSection={<IconTrash size={16} />}
-                            onClick={() => void remove(ride)}
-                          >
-                            Verwijderen
-                          </Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
-                    )}
-                  </Stack>
+                          Verwijderen
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  )}
                 </Group>
+
+                {!past && (
+                  <Group justify="flex-end" mt="md">
+                    {ride.is_joined ? (
+                      <Button
+                        variant="light"
+                        color="gray"
+                        size="sm"
+                        disabled={ride.owner.id === user?.id}
+                        onClick={() =>
+                          void mutate(
+                            () => api.leaveRide(ride.id),
+                            "Je bent afgemeld.",
+                          )
+                        }
+                      >
+                        Afmelden
+                      </Button>
+                    ) : (
+                      <Button
+                        color="routeboek"
+                        size="sm"
+                        disabled={full}
+                        onClick={() =>
+                          void mutate(
+                            () => api.joinRide(ride.id),
+                            "Je bent aangemeld.",
+                          )
+                        }
+                      >
+                        {full ? "Vol" : "Aanmelden"}
+                      </Button>
+                    )}
+                  </Group>
+                )}
               </Card>
             );
           })}
