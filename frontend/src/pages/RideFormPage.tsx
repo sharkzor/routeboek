@@ -165,6 +165,9 @@ export default function RideFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rideId, editing]);
 
+  const selectedRoute = routes.find((item) => String(item.id) === form.values.route_id);
+  const distanceLocked = Boolean(selectedRoute && selectedRoute.distance_km !== null);
+
   const pickRoute = (value: string | null) => {
     const routeId = value ?? "";
     form.setFieldValue("route_id", routeId);
@@ -175,7 +178,9 @@ export default function RideFormPage() {
     if (form.values.name.trim() === "" || currentIsRouteName) {
       form.setFieldValue("name", route.name);
     }
-    if (form.values.distance_km === "" && route.distance_km !== null) {
+    // De afstand van een rit volgt de vaste afstand van de route; die is dus
+    // niet los instelbaar zolang er een route met bekende afstand is gekozen.
+    if (route.distance_km !== null) {
       form.setFieldValue("distance_km", route.distance_km);
     }
   };
@@ -301,10 +306,14 @@ export default function RideFormPage() {
             <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
               <NumberInput
                 label="Afstand"
+                description={
+                  distanceLocked ? "Volgt automatisch uit de gekozen route" : undefined
+                }
                 suffix=" km"
                 min={0}
                 max={1000}
                 decimalScale={1}
+                disabled={distanceLocked}
                 {...form.getInputProps("distance_km")}
               />
               <NumberInput
