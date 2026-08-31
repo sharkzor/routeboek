@@ -51,6 +51,23 @@ body {
   display: block;
 }
 
+.rb-ride-thumb {
+  width: 120px;
+  height: 120px;
+  border-radius: var(--mantine-radius-md);
+  object-fit: cover;
+  background: #e8eef2;
+  display: block;
+  flex-shrink: 0;
+}
+
+@media (max-width: 48em) {
+  .rb-ride-thumb {
+    width: 80px;
+    height: 80px;
+  }
+}
+
 /* Beschrijvingen komen als HTML uit het oude routeboek. */
 .rb-description :is(p, ul, ol) {
   margin: 0 0 0.75em;

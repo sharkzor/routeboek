@@ -8,6 +8,7 @@ import {
   Card,
   Center,
   Group,
+  Image,
   Loader,
   Menu,
   SegmentedControl,
@@ -151,7 +152,17 @@ export default function RidesPage() {
             return (
               <Card key={ride.id} withBorder radius="md" p="lg">
                 <Group justify="space-between" align="flex-start" wrap="nowrap">
-                  <Stack gap={8} style={{ minWidth: 0 }}>
+                  {ride.route && (
+                    <Link to={`/routes/${ride.route.id}`} style={{ flexShrink: 0 }}>
+                      <Image
+                        src={ride.route.map_url ?? "/brand/map-pattern.png"}
+                        alt={`Kaart van ${ride.route.name}`}
+                        className="rb-ride-thumb"
+                        fallbackSrc="/brand/map-pattern.png"
+                      />
+                    </Link>
+                  )}
+                  <Stack gap={8} style={{ minWidth: 0, flex: 1 }}>
                     <Group gap={8} wrap="wrap">
                       <Text fw={700} fz="lg">
                         {ride.name}
