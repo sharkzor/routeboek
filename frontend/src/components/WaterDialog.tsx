@@ -59,7 +59,7 @@ export default function WaterDialog({
       title={
         <Group gap={8}>
           <IconDroplet size={20} color="var(--rb-red)" />
-          <Text fw={700}>Waterpunten toevoegen</Text>
+          <Text fw={700}>GPX met Waterpunten</Text>
         </Group>
       }
       size="lg"
@@ -69,8 +69,9 @@ export default function WaterDialog({
         {!result && (
           <>
             <Text size="sm" c="dimmed">
-              We zoeken drinkwaterpunten langs {route.name} en zetten ze als waypoints in een
-              nieuw GPX-bestand.
+              Genereer een GPX-bestand van <strong>{route.name}</strong> met drinkwaterpunten
+              (bron: drinkwaterpunten.nl) als extra waypoints erin, zodat je onderweg meteen ziet
+              waar je bidons kunt bijvullen.
             </Text>
 
             <Stack gap={4}>
@@ -84,6 +85,7 @@ export default function WaterDialog({
                 color="routeboek"
                 value={radius}
                 onChange={setRadius}
+                mb={28}
                 marks={[
                   { value: 100, label: "100 m" },
                   { value: 500, label: "500 m" },

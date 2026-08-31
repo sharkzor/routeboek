@@ -234,7 +234,7 @@ export default function RouteDetailPage() {
             leftSection={<IconDroplet size={18} />}
             onClick={waterDialog.open}
           >
-            Waterpunten zoeken
+            GPX met Waterpunten
           </Button>
         )}
       </Group>
