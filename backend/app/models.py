@@ -137,6 +137,9 @@ class Route(Base):
     wind_directions: Mapped[list[str]] = mapped_column(
         ARRAY(String(1)), default=list, nullable=False
     )
+    # True als wind_directions automatisch is ingeschat uit de geometrie
+    # (geen bron-data), zodat admins dit nog kunnen corrigeren.
+    wind_estimated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # beginners | high_pace | tourist
     categories: Mapped[list[str]] = mapped_column(
         ARRAY(String(20)), default=list, nullable=False
@@ -144,6 +147,11 @@ class Route(Base):
 
     rating: Mapped[float | None] = mapped_column(Float, index=True)
     rating_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Bevroren waardering zoals overgenomen uit het oude routeboek.cc (anoniem,
+    # zonder gebruikers-koppeling). Blijft meetellen in het gewogen gemiddelde
+    # samen met de echte RouteRating-rijen van ingelogde leden.
+    legacy_rating: Mapped[float | None] = mapped_column(Float)
+    legacy_rating_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     strava_url: Mapped[str | None] = mapped_column(String(500))
     gpx_file: Mapped[str | None] = mapped_column(String(255))
@@ -223,3 +231,48 @@ class RideParticipant(Base):
     user: Mapped[User] = relationship()
 
     __table_args__ = (UniqueConstraint("ride_id", "user_id", name="uq_ride_user"),)
+
+
+class RouteRating(Base):
+    """Waardering (1-5) van een ingelogd lid voor een route, hooguit één per lid."""
+
+    __tablename__ = "route_ratings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    route_id: Mapped[int] = mapped_column(
+        ForeignKey("routes.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    value: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+    user: Mapped[User] = relationship()
+
+    __table_args__ = (UniqueConstraint("route_id", "user_id", name="uq_route_rating_user"),)
+
+
+class RouteComment(Base):
+    """Reactie van een lid onder een route. Admins mogen elke reactie verwijderen."""
+
+    __tablename__ = "route_comments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    route_id: Mapped[int] = mapped_column(
+        ForeignKey("routes.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+
+    user: Mapped[User] = relationship()

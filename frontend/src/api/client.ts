@@ -7,6 +7,8 @@
  */
 
 import type {
+  Comment,
+  RatingResult,
   Ride,
   RideDefaults,
   RideInput,
@@ -224,9 +226,27 @@ export const api = {
   waterDownloadUrl: (job: WaterResult) =>
     `/api/water/download/${job.job_id}${query({ filename: job.filename })}`,
 
+  // -------------------------------------------------------- reacties/rating
+  comments: (routeId: number) => request<Comment[]>(`/api/routes/${routeId}/comments`),
+  addComment: (routeId: number, body: string) =>
+    request<Comment>(`/api/routes/${routeId}/comments`, {
+      method: "POST",
+      ...json({ body }),
+    }),
+  deleteComment: (routeId: number, commentId: number) =>
+    request<void>(`/api/routes/${routeId}/comments/${commentId}`, { method: "DELETE" }),
+  setRating: (routeId: number, value: number) =>
+    request<RatingResult>(`/api/routes/${routeId}/rating`, {
+      method: "PUT",
+      ...json({ value }),
+    }),
+  clearRating: (routeId: number) =>
+    request<RatingResult>(`/api/routes/${routeId}/rating`, { method: "DELETE" }),
+
   // ----------------------------------------------------------------- admin
   adminRoutes: (search?: string) =>
     request<RouteSummary[]>("/api/admin/routes" + query({ search })),
+  adminRoute: (id: number) => request<RouteDetail>(`/api/admin/routes/${id}`),
   adminCreateRoute: (form: FormData) =>
     request<RouteSummary>("/api/admin/routes", { method: "POST", body: form }),
   adminDeleteRoute: (id: number, hard = false) =>

@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Route, RouteType, User
+from app.rating import recompute_rating
 from app.security import hash_password, new_token, normalize_email
 
 logger = logging.getLogger(__name__)
@@ -63,13 +64,15 @@ def import_routes() -> tuple[int, int]:
             )
             route.wind_directions = item.get("wind_directions") or []
             route.categories = item.get("categories") or []
-            route.rating = item.get("rating")
-            route.rating_count = item.get("rating_count") or 0
+            route.legacy_rating = item.get("rating")
+            route.legacy_rating_count = item.get("rating_count") or 0
             route.strava_url = item.get("strava_url")
             route.gpx_file = item.get("gpx_file")
             route.tcx_file = item.get("tcx_file")
             route.map_file = item.get("map_file")
             route.coordinates = item.get("coordinates") or []
+            db.flush()
+            recompute_rating(db, route)
 
             created += is_new
             updated += not is_new

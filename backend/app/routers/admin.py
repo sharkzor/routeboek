@@ -23,11 +23,12 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import current_admin
 from app.models import Route, RouteType, User, utcnow
-from app.routers.routes import to_summary
+from app.routers.routes import to_detail, to_summary
 from app.schemas import (
     AdminUserUpdateIn,
     Message,
     RouteCreateIn,
+    RouteDetail,
     RouteSummary,
     RouteUpdateIn,
     UserOut,
@@ -146,6 +147,21 @@ async def create_route(
     return to_summary(route)
 
 
+@router.get("/routes/{route_id}", response_model=RouteDetail)
+def get_route(
+    route_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(current_admin),
+) -> RouteDetail:
+    """Volledige routegegevens voor het bewerkformulier (ook verborgen routes)."""
+    route = db.get(Route, route_id)
+    if route is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Deze route bestaat niet."
+        )
+    return to_detail(route)
+
+
 @router.patch("/routes/{route_id}", response_model=RouteSummary)
 def update_route(
     route_id: int,
@@ -158,7 +174,11 @@ def update_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Deze route bestaat niet."
         )
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "wind_directions" in data:
+        # Een admin die de wind handmatig invult, overschrijft de schatting.
+        route.wind_estimated = False
+    for key, value in data.items():
         setattr(route, key, value)
     db.commit()
     return to_summary(route)

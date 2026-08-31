@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.deps import current_user
-from app.models import Route, RouteType, User
+from app.models import Route, RouteRating, RouteType, User
 from app.schemas import RouteDetail, RoutePage, RouteSummary
 from app.water.processing import build_gpx_from_coordinates
 
@@ -48,6 +48,7 @@ def to_summary(route: Route) -> RouteSummary:
         elevation_m=route.elevation_m,
         route_type=route.route_type,
         wind_directions=route.wind_directions or [],
+        wind_estimated=route.wind_estimated,
         categories=route.categories or [],
         rating=route.rating,
         rating_count=route.rating_count,
@@ -139,6 +140,18 @@ def list_routes(
     )
 
 
+def to_detail(route: Route, my_rating: int | None = None) -> RouteDetail:
+    summary = to_summary(route)
+    return RouteDetail(
+        **summary.model_dump(),
+        description_html=route.description_html,
+        strava_url=route.strava_url,
+        coordinates=route.coordinates or [],
+        created_at=route.created_at,
+        my_rating=my_rating,
+    )
+
+
 def get_route_or_404(db: Session, route_id: int) -> Route:
     route = db.get(Route, route_id)
     if route is None or not route.is_active:
@@ -150,17 +163,15 @@ def get_route_or_404(db: Session, route_id: int) -> Route:
 
 @router.get("/{route_id}", response_model=RouteDetail)
 def route_detail(
-    route_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)
+    route_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)
 ) -> RouteDetail:
     route = get_route_or_404(db, route_id)
-    summary = to_summary(route)
-    return RouteDetail(
-        **summary.model_dump(),
-        description_html=route.description_html,
-        strava_url=route.strava_url,
-        coordinates=route.coordinates or [],
-        created_at=route.created_at,
+    existing = db.scalar(
+        select(RouteRating).where(
+            RouteRating.route_id == route.id, RouteRating.user_id == user.id
+        )
     )
+    return to_detail(route, my_rating=existing.value if existing else None)
 
 
 def _media_path(relative: str | None) -> Path | None:

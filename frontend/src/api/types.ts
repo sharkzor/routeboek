@@ -34,6 +34,7 @@ export interface RouteSummary {
   elevation_m: number | null;
   route_type: RouteType;
   wind_directions: WindCode[];
+  wind_estimated: boolean;
   categories: CategoryCode[];
   rating: number | null;
   rating_count: number;
@@ -48,6 +49,21 @@ export interface RouteDetail extends RouteSummary {
   strava_url: string | null;
   coordinates: [number, number][];
   created_at: string;
+  my_rating: number | null;
+}
+
+export interface Comment {
+  id: number;
+  display_name: string;
+  body: string;
+  created_at: string;
+  is_mine: boolean;
+}
+
+export interface RatingResult {
+  rating: number | null;
+  rating_count: number;
+  my_rating: number | null;
 }
 
 export interface RoutePage {

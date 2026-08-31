@@ -27,6 +27,7 @@ import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconMap,
+  IconPencil,
   IconPlus,
   IconSearch,
   IconTrash,
@@ -80,6 +81,7 @@ function RoutesTab() {
   const [addOpened, addDialog] = useDisclosure(false);
   const [pending, setPending] = useState<RouteSummary | null>(null);
   const [hardDelete, setHardDelete] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const load = useCallback(async (term: string) => {
     setRoutes(null);
@@ -171,7 +173,15 @@ function RoutesTab() {
                       {route.distance_km !== null ? `${route.distance_km.toFixed(1)} km` : "–"}
                     </Table.Td>
                     <Table.Td>{ROUTE_TYPE_LABELS[route.route_type]}</Table.Td>
-                    <Table.Td>{route.wind_directions.join(", ") || "–"}</Table.Td>
+                    <Table.Td>
+                      {route.wind_directions.join(", ") || "–"}
+                      {route.wind_estimated && route.wind_directions.length > 0 && (
+                        <Text span size="xs" c="dimmed">
+                          {" "}
+                          (geschat)
+                        </Text>
+                      )}
+                    </Table.Td>
                     <Table.Td>
                       {route.is_active ? (
                         <Badge color="green" variant="light">
@@ -195,6 +205,16 @@ function RoutesTab() {
                             Terugzetten
                           </Button>
                         )}
+                        <Tooltip label="Bewerken">
+                          <ActionIcon
+                            variant="subtle"
+                            color="routeboek"
+                            onClick={() => setEditingId(route.id)}
+                            aria-label={`Bewerk ${route.name}`}
+                          >
+                            <IconPencil size={16} />
+                          </ActionIcon>
+                        </Tooltip>
                         <Tooltip label="Verwijderen">
                           <ActionIcon
                             variant="subtle"
@@ -220,6 +240,15 @@ function RoutesTab() {
         onClose={addDialog.close}
         onCreated={() => {
           addDialog.close();
+          void load(search);
+        }}
+      />
+
+      <EditRouteModal
+        routeId={editingId}
+        onClose={() => setEditingId(null)}
+        onSaved={() => {
+          setEditingId(null);
           void load(search);
         }}
       />
@@ -383,6 +412,154 @@ function AddRouteModal({
           </Button>
         </Group>
       </Stack>
+    </Modal>
+  );
+}
+
+function EditRouteModal({
+  routeId,
+  onClose,
+  onSaved,
+}: {
+  routeId: number | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [routeType, setRouteType] = useState<RouteType>("road");
+  const [wind, setWind] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [strava, setStrava] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (routeId === null) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    api
+      .adminRoute(routeId)
+      .then((route) => {
+        if (cancelled) return;
+        setName(route.name);
+        setDescription(route.description_html);
+        setRouteType(route.route_type);
+        setWind(route.wind_directions);
+        setCategories(route.categories);
+        setStrava(route.strava_url ?? "");
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.message : "Route laden is mislukt.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [routeId]);
+
+  const submit = async () => {
+    if (routeId === null || name.trim().length < 2) {
+      setError("Vul een naam in.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const route = await api.adminUpdateRoute(routeId, {
+        name: name.trim(),
+        description_html: description,
+        route_type: routeType,
+        wind_directions: wind,
+        categories,
+        strava_url: strava.trim() || null,
+      });
+      notifications.show({ message: `'${route.name}' is bijgewerkt.`, color: "green" });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Opslaan is mislukt.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal opened={routeId !== null} onClose={onClose} title="Route bewerken" size="lg" centered>
+      {loading ? (
+        <Center py="xl">
+          <Loader color="routeboek" />
+        </Center>
+      ) : (
+        <Stack gap="md">
+          {error && (
+            <Alert color="red" variant="light">
+              {error}
+            </Alert>
+          )}
+          <TextInput
+            label="Naam"
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+            required
+          />
+          <Textarea
+            label="Beschrijving"
+            autosize
+            minRows={3}
+            value={description}
+            onChange={(event) => setDescription(event.currentTarget.value)}
+          />
+          <Select
+            label="Soort route"
+            data={(Object.keys(ROUTE_TYPE_LABELS) as RouteType[]).map((value) => ({
+              value,
+              label: ROUTE_TYPE_LABELS[value],
+            }))}
+            value={routeType}
+            allowDeselect={false}
+            onChange={(value) => setRouteType((value ?? "road") as RouteType)}
+          />
+          <MultiSelect
+            label="Windrichtingen"
+            description="Bij welke wind is deze route fijn?"
+            data={(Object.keys(WIND_LABELS) as WindCode[]).map((value) => ({
+              value,
+              label: WIND_LABELS[value],
+            }))}
+            value={wind}
+            onChange={setWind}
+          />
+          <MultiSelect
+            label="Aanbevolen voor"
+            data={(Object.keys(CATEGORY_LABELS) as CategoryCode[]).map((value) => ({
+              value,
+              label: CATEGORY_LABELS[value],
+            }))}
+            value={categories}
+            onChange={setCategories}
+          />
+          <TextInput
+            label="Strava-link"
+            placeholder="https://www.strava.com/routes/..."
+            value={strava}
+            onChange={(event) => setStrava(event.currentTarget.value)}
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" color="gray" onClick={onClose}>
+              Annuleren
+            </Button>
+            <Button color="routeboek" loading={busy} onClick={() => void submit()}>
+              Wijzigingen opslaan
+            </Button>
+          </Group>
+        </Stack>
+      )}
     </Modal>
   );
 }

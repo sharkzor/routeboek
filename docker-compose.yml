@@ -72,7 +72,7 @@ services:
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Routeboek Maximus Stampers}
 
       OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter}
-      DEFAULT_RADIUS_M: ${DEFAULT_RADIUS_M:-250}
+      DEFAULT_RADIUS_M: ${DEFAULT_RADIUS_M:-100}
       GAP_WARNING_KM: ${GAP_WARNING_KM:-40}
 
       SEED_ON_START: ${SEED_ON_START:-true}

@@ -28,4 +28,9 @@ if [ "${SEED_ON_START:-true}" = "true" ]; then
     python -m app.seed || echo "Import overgeslagen."
 fi
 
+if [ "${ESTIMATE_WIND_ON_START:-true}" = "true" ]; then
+    echo "Windrichting inschatten voor routes zonder tag ..."
+    python -m app.estimate_wind || echo "Windschatting overgeslagen."
+fi
+
 exec "$@"

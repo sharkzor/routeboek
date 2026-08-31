@@ -56,8 +56,14 @@ export default function RouteCard({ route }: { route: RouteSummary }) {
             {ROUTE_TYPE_LABELS[route.route_type]}
           </Badge>
           {route.wind_directions.map((wind) => (
-            <Badge key={wind} size="sm" variant="outline" color="gray" title={WIND_LABELS[wind]}>
-              {wind}
+            <Badge
+              key={wind}
+              size="sm"
+              variant="outline"
+              color="gray"
+              title={route.wind_estimated ? `${WIND_LABELS[wind]} (geschat)` : WIND_LABELS[wind]}
+            >
+              {route.wind_estimated ? `~${wind}` : wind}
             </Badge>
           ))}
         </Group>

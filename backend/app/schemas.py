@@ -106,6 +106,7 @@ class RouteSummary(BaseModel):
     elevation_m: int | None
     route_type: RouteType
     wind_directions: list[str]
+    wind_estimated: bool = False
     categories: list[str]
     rating: float | None
     rating_count: int
@@ -120,6 +121,39 @@ class RouteDetail(RouteSummary):
     strava_url: str | None
     coordinates: list[list[float]]
     created_at: datetime
+    my_rating: int | None = None
+
+
+class CommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    display_name: str
+    body: str
+    created_at: datetime
+    is_mine: bool = False
+
+
+class CommentCreateIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("body")
+    @classmethod
+    def _strip(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Een lege reactie kan niet worden geplaatst.")
+        return value
+
+
+class RatingIn(BaseModel):
+    value: int = Field(ge=1, le=5)
+
+
+class RatingOut(BaseModel):
+    rating: float | None
+    rating_count: int
+    my_rating: int | None
 
 
 class RoutePage(BaseModel):

@@ -28,6 +28,8 @@ import {
 import { Link, useNavigate, useParams } from "react-router";
 
 import Stars from "../components/Stars";
+import StarInput from "../components/StarInput";
+import CommentsSection from "../components/CommentsSection";
 import WaterDialog from "../components/WaterDialog";
 
 // Leaflet is fors; alleen deze pagina heeft het nodig.
@@ -89,6 +91,21 @@ export default function RouteDetailPage() {
     );
   }
 
+  const rate = async (value: number) => {
+    const previous = route;
+    setRoute({ ...route, my_rating: value });
+    try {
+      const result = await api.setRating(route.id, value);
+      setRoute((current) =>
+        current
+          ? { ...current, rating: result.rating, rating_count: result.rating_count, my_rating: result.my_rating }
+          : current,
+      );
+    } catch {
+      setRoute(previous);
+    }
+  };
+
   return (
     <Stack gap="lg">
       <Anchor component={Link} to="/routes" c="dimmed" size="sm">
@@ -100,8 +117,13 @@ export default function RouteDetailPage() {
       <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">
         <Box>
           <Title order={2}>{route.name}</Title>
-          <Group gap="xs" mt={6}>
+          <Group gap="xs" mt={6} align="center">
             <Stars value={route.rating} count={route.rating_count} size={18} />
+            <Text size="xs" c="dimmed">·</Text>
+            <Group gap={6} align="center">
+              <Text size="xs" c="dimmed">Jouw waardering:</Text>
+              <StarInput size={16} value={route.my_rating} onChange={rate} />
+            </Group>
           </Group>
         </Box>
         <Button
@@ -132,6 +154,7 @@ export default function RouteDetailPage() {
               ? route.wind_directions.map((w) => WIND_LABELS[w]).join(", ")
               : "Geen voorkeur"
           }
+          hint={route.wind_estimated ? "Geschat, geen vaste tag" : undefined}
         />
       </SimpleGrid>
 
@@ -241,6 +264,8 @@ export default function RouteDetailPage() {
         onClose={waterDialog.close}
         onResult={setWater}
       />
+
+      <CommentsSection routeId={route.id} />
     </Stack>
   );
 }
@@ -249,10 +274,12 @@ function Metric({
   icon,
   label,
   value,
+  hint,
 }: {
   icon?: React.ReactNode;
   label: string;
   value: string;
+  hint?: string;
 }) {
   return (
     <Paper radius="md" p="md" withBorder>
@@ -263,6 +290,11 @@ function Metric({
         </Text>
       </Group>
       <Text fw={700}>{value}</Text>
+      {hint && (
+        <Text size="xs" c="dimmed" mt={2}>
+          {hint}
+        </Text>
+      )}
     </Paper>
   );
 }

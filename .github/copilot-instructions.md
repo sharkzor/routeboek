@@ -12,9 +12,11 @@ op een Raspberry Pi die doorstuurt naar deze server op poort **8083**).
 
 De applicatie draait en is end-to-end getest: 166 routes geïmporteerd,
 registratie + e-mailverificatie, login/lockout, wachtwoordherstel, filters,
-GPX/TCX-downloads, waterpunten, ritten aanmaken/aanmelden en de beheerpagina.
-Het beheerdersaccount `r.vloothuis@gmail.com` bestaat met een willekeurig
-wachtwoord: gebruik eenmalig "wachtwoord vergeten" om er zelf één in te stellen.
+GPX/TCX-downloads, waterpunten, ritten aanmaken/aanmelden, reacties +
+waarderingen per route en de beheerpagina (routes toevoegen/bewerken/
+verwijderen, gebruikersbeheer). Het beheerdersaccount `r.vloothuis@gmail.com`
+bestaat met een willekeurig wachtwoord: gebruik eenmalig "wachtwoord
+vergeten" om er zelf één in te stellen.
 
 ---
 
@@ -171,6 +173,8 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
 - `user_sessions` — serverside sessies; de cookie bevat alleen een random token
 - `email_tokens` — eenmalige tokens (`verify_email`, `reset_password`)
 - `routes` — de 166 geïmporteerde routes plus door admins toegevoegde routes
+- `route_ratings` — waardering (1-5) per lid per route, uniek per paar
+- `route_comments` — reacties van leden onder een route
 - `rides` — georganiseerde ritten
 - `ride_participants` — aanmeldingen (uniek per rit/gebruiker)
 
@@ -286,8 +290,38 @@ toevoegen aan de GPX. De logica is overgenomen uit `/home/shark/gpx`
 - Er komt een waarschuwing bij een "droog" stuk langer dan `gap_warning_km`.
 
 ### Adminpagina
-Routes toevoegen (GPX-upload) en verwijderen, gebruikers activeren/blokkeren en
+Routes toevoegen (GPX-upload), bewerken en verwijderen (`GET/PATCH/DELETE
+/api/admin/routes/{id}`; de admin-detailendpoint negeert `is_active` zodat
+ook verborgen routes te bewerken zijn), gebruikers activeren/blokkeren en
 adminrechten toekennen.
+
+### Windrichting inschatten
+Sommige gemigreerde routes hadden geen windrichting-tag. Heuristiek (van de
+club): je fietst het stuk van huis vandaan het liefst tegen de wind in, zodat
+je op de terugweg wind mee hebt. `estimate_wind_direction()` in
+`app/water/geo.py` neemt het verst-van-het-startpunt gelegen punt op de route
+als (ruwe) keerpunt, berekent de kompaskoers ernaartoe en rondt die af op de
+dichtstbijzijnde windstreek (N/O/Z/W). `Route.wind_estimated` onthoudt of een
+tag een gok is (badge "geschat" in UI en adminlijst); zodra een admin de
+windrichting handmatig bewerkt, wordt de vlag automatisch gewist. Het
+one-off script `python -m app.estimate_wind` (draait idempotent mee in
+`docker/entrypoint.sh` bij elke start) vult ontbrekende tags aan.
+
+### Reacties en waarderingen
+Elke ingelogde gebruiker mag onder een route reageren (`RouteComment`,
+platte tekst, geen HTML) en waarderen (`RouteRating`, 1-5 sterren, één stem
+per lid, opnieuw stemmen overschrijft de vorige). Admins mogen elke reactie
+verwijderen (bijv. bij ongepaste inhoud) via `DELETE
+/api/routes/{id}/comments/{comment_id}`.
+
+De getoonde waardering (`Route.rating`/`rating_count`) is een **gewogen
+gemiddelde** van de bevroren, anonieme waardering uit het oude routeboek.cc
+(`legacy_rating`/`legacy_rating_count`, gezet door `app/seed.py` uit het
+scrapebestand) en de echte stemmen van leden. Herberekening gebeurt via de
+gedeelde helper `app/rating.py:recompute_rating()`, aangeroepen door zowel
+`app/seed.py` (na elke import) als `app/routers/social.py` (na elke
+stem/verwijdering). Zo blijft historische informatie behouden zonder dat
+scrapete "stemmen" een eigen gebruikersaccount nodig hebben.
 
 ---
 
