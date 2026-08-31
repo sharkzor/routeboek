@@ -7,8 +7,10 @@ import {
   Button,
   Card,
   Center,
+  Collapse,
   Group,
   Image,
+  List,
   Loader,
   Menu,
   SegmentedControl,
@@ -16,10 +18,13 @@ import {
   Text,
   Title,
   Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
   IconCalendarPlus,
+  IconChevronDown,
+  IconChevronUp,
   IconClock,
   IconDots,
   IconLock,
@@ -51,6 +56,16 @@ export default function RidesPage() {
   const [scope, setScope] = useState<Scope>("upcoming");
   const [rides, setRides] = useState<Ride[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const toggleExpanded = (rideId: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(rideId)) next.delete(rideId);
+      else next.add(rideId);
+      return next;
+    });
+  };
 
   const load = useCallback(async () => {
     setRides(null);
@@ -221,21 +236,67 @@ export default function RidesPage() {
                     )}
 
                     <Group gap={6} mt={4}>
-                      <Avatar.Group spacing="sm">
-                        {ride.participants.slice(0, 8).map((participant) => (
-                          <Tooltip key={participant.id} label={participant.display_name}>
-                            <Avatar size="sm" color="routeboek" radius="xl">
-                              {participant.display_name.slice(0, 2).toUpperCase()}
-                            </Avatar>
-                          </Tooltip>
-                        ))}
-                      </Avatar.Group>
-                      {ride.participant_count > 8 && (
-                        <Text size="xs" c="dimmed">
-                          +{ride.participant_count - 8}
-                        </Text>
-                      )}
+                      <UnstyledButton
+                        onClick={() => toggleExpanded(ride.id)}
+                        style={{ display: "flex", alignItems: "center", gap: 8 }}
+                      >
+                        <Avatar.Group spacing="sm">
+                          {ride.participants.slice(0, 8).map((participant) => (
+                            <Tooltip key={participant.id} label={participant.display_name}>
+                              <Avatar size="sm" color="routeboek" radius="xl">
+                                {participant.display_name.slice(0, 2).toUpperCase()}
+                              </Avatar>
+                            </Tooltip>
+                          ))}
+                        </Avatar.Group>
+                        {ride.participant_count > 8 && (
+                          <Text size="xs" c="dimmed">
+                            +{ride.participant_count - 8}
+                          </Text>
+                        )}
+                        {ride.participant_count > 0 && (
+                          <Group gap={2} c="routeboek.6">
+                            <Text size="xs" fw={600}>
+                              {expanded.has(ride.id) ? "Verberg deelnemers" : "Wie gaan er mee?"}
+                            </Text>
+                            {expanded.has(ride.id) ? (
+                              <IconChevronUp size={14} />
+                            ) : (
+                              <IconChevronDown size={14} />
+                            )}
+                          </Group>
+                        )}
+                      </UnstyledButton>
                     </Group>
+
+                    <Collapse expanded={expanded.has(ride.id)}>
+                      {ride.participant_count === 0 ? (
+                        <Text size="sm" c="dimmed">
+                          Nog geen aanmeldingen.
+                        </Text>
+                      ) : (
+                        <List size="sm" spacing={4} mt={4}>
+                          {ride.participants.map((participant) => (
+                            <List.Item
+                              key={participant.id}
+                              icon={
+                                <Avatar size={20} color="routeboek" radius="xl">
+                                  {participant.display_name.slice(0, 2).toUpperCase()}
+                                </Avatar>
+                              }
+                            >
+                              {participant.display_name}
+                              {participant.id === ride.owner.id && (
+                                <Text span size="xs" c="dimmed">
+                                  {" "}
+                                  (wegkapitein)
+                                </Text>
+                              )}
+                            </List.Item>
+                          ))}
+                        </List>
+                      )}
+                    </Collapse>
                   </Stack>
 
                   <Stack gap="xs" align="flex-end" style={{ flexShrink: 0 }}>
