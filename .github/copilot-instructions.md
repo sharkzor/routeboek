@@ -230,6 +230,18 @@ Iedereen mag zich registreren, maar **e-mailverificatie is verplicht** voordat
 er ingelogd kan worden. `r.vloothuis@gmail.com` krijgt bij het opstarten
 automatisch adminrechten (instelbaar via `ADMIN_EMAIL`).
 
+**Bevestigingslinks blijven allemaal geldig totdat er één gebruikt wordt.**
+`issue_email_token(..., invalidate_existing=False)` wordt gebruikt voor
+`verify_email`-tokens: vraagt iemand de mail meerdere keren opnieuw aan (bv.
+omdat de eerste mail traag binnenkomt), dan werkt élke ontvangen link nog,
+niet alleen de allerlaatste. Er zit wel een cooldown van 60s
+(`RESEND_COOLDOWN` in `auth.py`) op het daadwerkelijk versturen van een
+nieuwe mail, zodat herhaald klikken op "registreren" geen mailbom veroorzaakt.
+Wachtwoordherstel-tokens (`reset_password`) worden bewust wél ingetrokken bij
+een nieuwe aanvraag (`invalidate_existing=True`, de standaard): een oude
+reset-link laten "rondslingeren" is een groter veiligheidsrisico dan bij
+e-mailbevestiging.
+
 ---
 
 ## 7. E-mail

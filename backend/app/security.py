@@ -134,18 +134,33 @@ def revoke_all_sessions(db: Session, user_id: int) -> None:
 
 
 def issue_email_token(
-    db: Session, user: User, purpose: TokenPurpose, ttl: timedelta
+    db: Session,
+    user: User,
+    purpose: TokenPurpose,
+    ttl: timedelta,
+    invalidate_existing: bool = True,
 ) -> str:
-    """Maak een eenmalig token en trek eerdere ongebruikte tokens in."""
+    """Maak een eenmalig token.
+
+    Standaard trekt dit eerdere ongebruikte tokens voor hetzelfde doel in
+    (belangrijk bij wachtwoordherstel: een oude reset-link mag na een nieuwe
+    aanvraag niet blijven werken). Voor e-mailbevestiging zetten we
+    `invalidate_existing=False`: als iemand de mail meerdere keren opnieuw
+    aanvraagt (bv. omdat de eerste mail traag aankomt), blijven alle
+    verstuurde links geldig totdat er eentje gebruikt wordt. Anders klikt de
+    gebruiker op een 'oude' mail uit hun postvak en krijgt onterecht
+    'ongeldige link' te zien, terwijl de link an sich prima werkte.
+    """
     now = utcnow()
-    for old in db.scalars(
-        select(EmailToken).where(
-            EmailToken.user_id == user.id,
-            EmailToken.purpose == purpose,
-            EmailToken.used_at.is_(None),
-        )
-    ):
-        old.used_at = now
+    if invalidate_existing:
+        for old in db.scalars(
+            select(EmailToken).where(
+                EmailToken.user_id == user.id,
+                EmailToken.purpose == purpose,
+                EmailToken.used_at.is_(None),
+            )
+        ):
+            old.used_at = now
 
     raw = new_token()
     db.add(

@@ -26,7 +26,7 @@ from app.deps import (
     set_auth_cookies,
 )
 from app.mail import send_password_reset_mail, send_verification_mail
-from app.models import TokenPurpose, User, UserSession, utcnow
+from app.models import EmailToken, TokenPurpose, User, UserSession, utcnow
 from app.schemas import (
     ChangePasswordIn,
     ForgotPasswordIn,
@@ -71,10 +71,35 @@ def _find_user(db: Session, email: str) -> User | None:
     return db.scalar(select(User).where(func.lower(User.email) == normalize_email(email)))
 
 
+RESEND_COOLDOWN = timedelta(seconds=60)
+
+
+def _recent_unused_token(db: Session, user: User, purpose: TokenPurpose) -> EmailToken | None:
+    return db.scalar(
+        select(EmailToken)
+        .where(
+            EmailToken.user_id == user.id,
+            EmailToken.purpose == purpose,
+            EmailToken.used_at.is_(None),
+            EmailToken.created_at >= utcnow() - RESEND_COOLDOWN,
+        )
+        .order_by(EmailToken.created_at.desc())
+    )
+
+
 def _send_verification(background: BackgroundTasks, db: Session, user: User) -> None:
     settings = get_settings()
+    # Voorkom een stortvloed aan mails (en dus verwarring over welke link de
+    # geldige is) als iemand kort na elkaar meerdere keren op "registreren"
+    # klikt: de al verstuurde, nog geldige link volstaat dan.
+    if _recent_unused_token(db, user, TokenPurpose.verify_email) is not None:
+        return
     raw = issue_email_token(
-        db, user, TokenPurpose.verify_email, timedelta(hours=settings.verify_token_ttl_hours)
+        db,
+        user,
+        TokenPurpose.verify_email,
+        timedelta(hours=settings.verify_token_ttl_hours),
+        invalidate_existing=False,
     )
     url = f"{settings.base_url.rstrip('/')}/verifieren?token={raw}"
     background.add_task(
