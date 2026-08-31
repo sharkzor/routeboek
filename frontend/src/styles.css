@@ -1,0 +1,71 @@
+:root {
+  --rb-red: #f4244e;
+  --rb-bg: #f2f4f7;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--rb-bg);
+  font-family: Archivo, Helvetica, Arial, sans-serif;
+}
+
+/* Rode koptekst met het topografische lijnenpatroon van routeboek.cc. */
+.rb-header {
+  background-color: var(--rb-red);
+  background-image: url("/brand/map-pattern.png");
+  background-size: 750px;
+  box-shadow: 0 8px 24px rgb(25 25 25 / 15%);
+}
+
+.rb-auth-page {
+  min-height: 100%;
+  background-color: var(--rb-red);
+  background-image: url("/brand/map-pattern.png");
+  background-size: 750px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.rb-route-card {
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.rb-route-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgb(25 25 25 / 14%);
+}
+
+.rb-map-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #e8eef2;
+  display: block;
+}
+
+/* Beschrijvingen komen als HTML uit het oude routeboek. */
+.rb-description :is(p, ul, ol) {
+  margin: 0 0 0.75em;
+}
+
+.rb-description a {
+  color: var(--rb-red);
+}
+
+.rb-description img {
+  max-width: 100%;
+  height: auto;
+}
+
+.leaflet-container {
+  border-radius: 8px;
+  z-index: 0;
+}

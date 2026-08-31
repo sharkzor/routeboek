@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Routeboek ---------------------------------------------------------------
+# Gescrapete routes en mediabestanden (~140 MB); staan in het datavolume.
+/data/
+# Virtualenv van de eenmalige scraper
+/.scrapevenv/
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+# Gebouwde frontend in de backend
+/backend/app/static/
+# Devvenv voor migraties
+/.devvenv/

@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: routeboek-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-routeboek}
+      POSTGRES_USER: ${POSTGRES_USER:-routeboek}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD ontbreekt in .env}
+      # Zonder scram-sha-256 zou trust-auth mogelijk zijn binnen het netwerk.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    volumes:
+      # Postgres 18 verwacht de mount op /var/lib/postgresql; de data komt in
+      # een submap per hoofdversie, zodat pg_upgrade later mogelijk blijft.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-routeboek} -d ${POSTGRES_DB:-routeboek}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: routeboek-stampers:latest
+    container_name: routeboek
+    restart: unless-stopped
+    # Draait als de eigenaar van ./data, zodat de app in de bind-mount mag
+    # schrijven (cache, tmp, uploads) zonder dat die map root-eigendom wordt.
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Luistert op alle interfaces; de reverse proxy op de Pi stuurt hierheen.
+      - "8083:8083"
+    volumes:
+      - ./data:/app/data
+    environment:
+      PORT: 8083
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATA_DIR: /app/data
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-routeboek}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-routeboek}
+
+      BASE_URL: ${BASE_URL:-https://routeboek.unencrypted.nl}
+      CLUB_NAME: ${CLUB_NAME:-Maximus Stampers}
+      SECRET_KEY: ${SECRET_KEY:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-r.vloothuis@gmail.com}
+      ADMIN_NAME: ${ADMIN_NAME:-Robert Vloothuis}
+
+      MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      SMTP_HOST: ${SMTP_HOST:-smtp.ziggo.nl}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_SSL: ${SMTP_SSL:-false}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Routeboek Maximus Stampers}
+
+      OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter}
+      DEFAULT_RADIUS_M: ${DEFAULT_RADIUS_M:-250}
+      GAP_WARNING_KM: ${GAP_WARNING_KM:-40}
+
+      SEED_ON_START: ${SEED_ON_START:-true}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  db-data:
