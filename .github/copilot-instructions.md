@@ -230,6 +230,15 @@ Verzending loopt via het Ziggo-account `routeboek@ziggo.nl`.
   het request nooit ophoudt.
 - Een mislukte verzending mag nooit informatie lekken over het bestaan van een
   account.
+- `send_mail()` zet zelf `Date` en `Message-ID`. Die zijn verplicht volgens
+  RFC 5322 en `smtplib` vult ze niet aan; zonder die headers rekenen
+  spamfilters punten aan en belanden bevestigings- en herstelmails in de
+  spammap. Verwijder ze niet.
+- De container draait op `TZ=Europe/Amsterdam` (zie `docker-compose.yml`). Dat
+  is nodig voor de tijdstempels in mail én voor `next_standard_slot()`, dat op
+  lokale tijd bepaalt of het clubmoment van vandaag al geweest is.
+- Meelezen in de clubmailbox kan via IMAP: `imap.ziggo.nl:993` (SSL), dezelfde
+  inloggegevens als SMTP. Poort 143 is dicht.
 
 ---
 

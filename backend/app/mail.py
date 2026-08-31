@@ -11,7 +11,7 @@ import logging
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import formataddr
+from email.utils import formataddr, formatdate, make_msgid
 
 from app.config import get_settings
 
@@ -31,6 +31,12 @@ def send_mail(to: str, subject: str, text_body: str, html_body: str | None = Non
     message["Subject"] = subject
     message["From"] = formataddr((settings.smtp_from_name, settings.mail_from))
     message["To"] = to
+    # Date en Message-ID zijn verplicht volgens RFC 5322 en smtplib vult ze niet
+    # aan. Zonder deze headers rekenen spamfilters punten aan, waardoor
+    # bevestigings- en herstelmails in de spammap belanden.
+    message["Date"] = formatdate(localtime=True)
+    domain = settings.mail_from.rpartition("@")[2] or None
+    message["Message-ID"] = make_msgid(domain=domain)
     message.set_content(text_body)
     if html_body:
         message.add_alternative(html_body, subtype="html")

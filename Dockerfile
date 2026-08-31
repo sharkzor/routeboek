@@ -17,7 +17,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DATA_DIR=/app/data \
-    PORT=8083
+    PORT=8083 \
+    TZ=Europe/Amsterdam
 
 WORKDIR /app
 
