@@ -59,17 +59,13 @@ class Settings(BaseSettings):
     ride_default_participants: int = 10
 
     # -- Waterpunten (overgenomen uit de gpx-waterpunten app) -------------
+    # Alle routes van de club liggen in Nederland, dus is drinkwaterpunten.nl
+    # de enige bron (geen OSM/Overpass-alternatief meer nodig).
     nl_gpx_url: str = (
         "https://drinkwaterpunten.nl/assets/gpx/publieke_drinkwaterpunten_nl.gpx"
     )
     nl_cache_ttl_seconds: int = 86400
-    nl_share_threshold: float = 0.8
-    overpass_url: str = (
-        "https://overpass-api.de/api/interpreter,"
-        "https://overpass.private.coffee/api/interpreter"
-    )
-    overpass_timeout: int = 60
-    default_radius_m: int = 250
+    default_radius_m: int = 100
     dedupe_distance_m: float = 50.0
     gap_warning_km: float = 40.0
     waypoint_prefix: str = "💧 Water"

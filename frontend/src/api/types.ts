@@ -134,7 +134,6 @@ export interface WaterResult {
   filename: string;
   source: string;
   radius_m: number;
-  nl_share: number;
   stats: WaterStats;
   water_points: WaterPoint[];
 }

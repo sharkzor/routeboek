@@ -216,9 +216,9 @@ export const api = {
   leaveRide: (id: number) => request<Ride>(`/api/rides/${id}/leave`, { method: "POST" }),
 
   // ----------------------------------------------------------- waterpunten
-  waterPoints: (routeId: number, radiusM: number, source: string) =>
+  waterPoints: (routeId: number, radiusM: number) =>
     request<WaterResult>(
-      `/api/water/routes/${routeId}` + query({ radius_m: radiusM, source }),
+      `/api/water/routes/${routeId}` + query({ radius_m: radiusM }),
       { method: "POST" },
     ),
   waterDownloadUrl: (job: WaterResult) =>

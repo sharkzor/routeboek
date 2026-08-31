@@ -4,7 +4,6 @@ import {
   Button,
   Group,
   Modal,
-  Radio,
   SimpleGrid,
   Slider,
   Stack,
@@ -14,12 +13,6 @@ import { IconAlertTriangle, IconDownload, IconDroplet } from "@tabler/icons-reac
 
 import { ApiError, api } from "../api/client";
 import type { RouteDetail, WaterResult } from "../api/types";
-
-const SOURCE_LABELS: Record<string, string> = {
-  auto: "Automatisch (beste dekking)",
-  nl: "drinkwaterpunten.nl",
-  osm: "OpenStreetMap",
-};
 
 export default function WaterDialog({
   route,
@@ -32,8 +25,7 @@ export default function WaterDialog({
   onClose: () => void;
   onResult?: (result: WaterResult | null) => void;
 }) {
-  const [radius, setRadius] = useState(250);
-  const [source, setSource] = useState("auto");
+  const [radius, setRadius] = useState(100);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<WaterResult | null>(null);
@@ -42,7 +34,7 @@ export default function WaterDialog({
     setBusy(true);
     setError(null);
     try {
-      const response = await api.waterPoints(route.id, radius, source);
+      const response = await api.waterPoints(route.id, radius);
       setResult(response);
       onResult?.(response);
     } catch (err) {
@@ -100,14 +92,6 @@ export default function WaterDialog({
               />
             </Stack>
 
-            <Radio.Group label="Bron" value={source} onChange={setSource} mt="md">
-              <Stack gap={6} mt={8}>
-                {Object.entries(SOURCE_LABELS).map(([code, label]) => (
-                  <Radio key={code} value={code} label={label} color="routeboek" />
-                ))}
-              </Stack>
-            </Radio.Group>
-
             {error && (
               <Alert color="red" variant="light">
                 {error}
@@ -145,8 +129,7 @@ export default function WaterDialog({
             </SimpleGrid>
 
             <Text size="sm" c="dimmed">
-              Bron: {SOURCE_LABELS[result.source] ?? result.source} · zoekafstand{" "}
-              {result.radius_m} m
+              Bron: {result.source} · zoekafstand {result.radius_m} m
             </Text>
 
             {result.stats.warning && (

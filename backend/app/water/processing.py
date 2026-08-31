@@ -2,6 +2,9 @@
 
 Overgenomen uit de gpx-waterpunten applicatie en aangepast zodat de bron een
 route uit het routeboek is in plaats van een upload.
+
+Alle routes van de club liggen in Nederland, dus is drinkwaterpunten.nl de
+enige bron; er is geen OSM/Overpass-alternatief (meer) nodig.
 """
 
 from __future__ import annotations
@@ -12,28 +15,14 @@ import uuid
 from pathlib import Path
 
 from app.config import get_settings
-from app.water import gpx_service, osm_service, route_service, waterpoints_nl
-from app.water.geo import nl_share
+from app.water import gpx_service, route_service, waterpoints_nl
 from app.water.types import RouteStats, WaterPoint
 
 logger = logging.getLogger(__name__)
 
-SOURCE_AUTO = "auto"
-SOURCE_NL = "nl"
-SOURCE_OSM = "osm"
-
 
 class WaterError(RuntimeError):
     """Waterpunten konden niet worden bepaald."""
-
-
-def _pick_source(share: float, requested: str) -> str:
-    if requested == SOURCE_NL:
-        return waterpoints_nl.SOURCE_NAME
-    if requested == SOURCE_OSM:
-        return osm_service.SOURCE_NAME
-    threshold = get_settings().nl_share_threshold
-    return waterpoints_nl.SOURCE_NAME if share >= threshold else osm_service.SOURCE_NAME
 
 
 def output_path(job_id: str) -> Path:
@@ -65,11 +54,10 @@ def add_water_points(
     raw_gpx: bytes,
     route_name: str,
     radius_m: int | None = None,
-    requested_source: str = SOURCE_AUTO,
-) -> tuple[str, str, str, float, RouteStats, list[WaterPoint]]:
+) -> tuple[str, str, str, RouteStats, list[WaterPoint]]:
     """Voeg drinkwaterpunten toe aan een GPX.
 
-    Geeft (job_id, bestandsnaam, gebruikte bron, aandeel NL, statistiek, punten).
+    Geeft (job_id, bestandsnaam, bron, statistiek, punten).
     """
     settings = get_settings()
     settings.ensure_dirs()
@@ -78,22 +66,15 @@ def add_water_points(
     gpx = gpx_service.parse_gpx(raw_gpx)
     route_points = gpx_service.extract_route_points(gpx)
     coords = [(p.lat, p.lon) for p in route_points]
-    share = nl_share(coords)
-    source = _pick_source(share, requested_source)
     logger.info(
-        "Route '%s': %d punten, %.0f%% in NL, bron=%s, radius=%d m",
+        "Route '%s': %d punten, radius=%d m",
         route_name,
         len(coords),
-        share * 100,
-        source,
         radius,
     )
 
     try:
-        if source == waterpoints_nl.SOURCE_NAME:
-            candidates = waterpoints_nl.load_water_points_near(coords, radius + 1000)
-        else:
-            candidates = osm_service.load_water_points_near(coords, radius)
+        candidates = waterpoints_nl.load_water_points_near(coords, radius + 1000)
     except Exception as exc:
         raise WaterError(f"Drinkwaterpunten ophalen mislukt: {exc}") from exc
 
@@ -110,7 +91,7 @@ def add_water_points(
     )
     cleanup_jobs()
 
-    return job_id, safe_filename(route_name), source, round(share, 3), stats, matched
+    return job_id, safe_filename(route_name), waterpoints_nl.SOURCE_NAME, stats, matched
 
 
 def build_gpx_from_coordinates(name: str, coordinates: list[list[float]]) -> str:

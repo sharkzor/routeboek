@@ -1,64 +1,9 @@
-"""Geometrische hulpfuncties: lokale metrische projectie en NL-detectie."""
+"""Geometrische hulpfuncties: lokale metrische projectie."""
 
 from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-
-from shapely.geometry import Point, Polygon
-
-EARTH_RADIUS_M = 6371008.8
-_DEG_LAT_M = 111132.0
-
-# Sterk vereenvoudigde omtrek van Nederland (lon, lat). Voldoende nauwkeurig
-# voor de vraag "ligt deze route grotendeels in Nederland?".
-NL_OUTLINE: tuple[tuple[float, float], ...] = (
-    (3.36, 51.28),
-    (3.36, 51.55),
-    (3.95, 51.98),
-    (4.45, 52.35),
-    (4.72, 52.98),
-    (5.35, 53.30),
-    (6.20, 53.55),
-    (6.95, 53.45),
-    (7.22, 53.20),
-    (7.05, 52.85),
-    (6.70, 52.63),
-    (7.08, 52.42),
-    (7.06, 52.23),
-    (6.75, 52.10),
-    (6.83, 51.99),
-    (6.42, 51.86),
-    (6.22, 51.87),
-    (6.16, 51.54),
-    (6.23, 51.36),
-    (6.02, 51.24),
-    (5.90, 50.98),
-    (6.02, 50.75),
-    (5.64, 50.84),
-    (5.70, 51.09),
-    (5.20, 51.26),
-    (4.83, 51.42),
-    (4.39, 51.45),
-    (3.85, 51.41),
-    (3.36, 51.28),
-)
-
-_NL_POLYGON = Polygon(NL_OUTLINE)
-
-
-def in_netherlands(lat: float, lon: float) -> bool:
-    """Ligt een coordinaat (ruwweg) in Nederland?"""
-    return _NL_POLYGON.covers(Point(lon, lat))
-
-
-def nl_share(points: Sequence[tuple[float, float]]) -> float:
-    """Aandeel van de punten dat in Nederland ligt (0..1)."""
-    if not points:
-        return 0.0
-    inside = sum(1 for lat, lon in points if in_netherlands(lat, lon))
-    return inside / len(points)
-
 
 class LocalProjection:
     """Equirectangulaire projectie rond een referentiepunt, in meters.

@@ -29,7 +29,6 @@ router = APIRouter(prefix="/api/water", tags=["water"])
 def add_water_points(
     route_id: int,
     radius_m: int = Query(default=0, ge=0, le=2000),
-    source: str = Query(default="auto", pattern="^(auto|nl|osm)$"),
     db: Session = Depends(get_db),
     _: User = Depends(current_user),
 ) -> WaterResult:
@@ -50,11 +49,10 @@ def add_water_points(
         )
 
     try:
-        job_id, filename, used_source, share, stats, points = processing.add_water_points(
+        job_id, filename, used_source, stats, points = processing.add_water_points(
             raw,
             route.name,
             radius_m=radius_m or settings.default_radius_m,
-            requested_source=source,
         )
     except GpxError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -70,7 +68,6 @@ def add_water_points(
         filename=filename,
         source=used_source,
         radius_m=radius_m or settings.default_radius_m,
-        nl_share=share,
         stats=WaterStats(
             total_distance_km=stats.total_distance_km,
             water_point_count=stats.water_point_count,

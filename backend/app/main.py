@@ -56,7 +56,7 @@ def create_app() -> FastAPI:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "img-src 'self' data: https://*.tile.openstreetmap.org; "
+            "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com data:; "
             "script-src 'self'; "

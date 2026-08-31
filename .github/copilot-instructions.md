@@ -91,8 +91,7 @@ routeboek/
 │       └── water/                    overgenomen uit /home/shark/gpx
 │           ├── geo.py                projectie, NL-detectie, bounding box
 │           ├── gpx_service.py        GPX lezen/schrijven
-│           ├── osm_service.py        Overpass API
-│           ├── waterpoints_nl.py     drinkwaterpunten.nl (24u cache)
+│           ├── waterpoints_nl.py     drinkwaterpunten.nl (24u cache, enige bron)
 │           ├── route_service.py      koppelen aan route, dedupe, statistiek
 │           └── processing.py         orkestratie
 ├── frontend/
@@ -210,6 +209,16 @@ Dit is een publiek bereikbare applicatie. Houd je aan de volgende regels:
 11. **Mediabestanden** (GPX/TCX/kaarten) gaan via endpoints, niet via
     `StaticFiles`, zodat ze alleen voor ingelogde gebruikers beschikbaar zijn.
     `_media_path()` in `routers/routes.py` weert path traversal.
+12. **Content-Security-Policy** (`main.py`, `security_headers`-middleware) staat
+    alleen `img-src` toe voor `'self'`, `data:` en de OSM-tegelserver. Let op:
+    `https://*.tile.openstreetmap.org` matcht géén requests naar het kale
+    `tile.openstreetmap.org` (zonder subdomein) — CSP-wildcards matchen alleen
+    subdomeinen, niet de host zelf. `RouteMap.tsx` gebruikt bewust de URL
+    zónder subdomeinprefix, dus **beide** varianten moeten in de CSP staan.
+    Vergeet dit niet als je ooit een andere tegelbron toevoegt: een grijze
+    kaart met alleen de rode routelijn (SVG wordt niet door `img-src`
+    geblokkeerd) is het symptoom van een CSP-mismatch, niet van een kapotte
+    kaartcomponent.
 
 ### Registratie
 
@@ -264,10 +273,14 @@ Een privé-rit verschijnt niet in het standaardoverzicht.
 ### Waterpunten
 Bij het downloaden van een route kan de gebruiker drinkwaterpunten laten
 toevoegen aan de GPX. De logica is overgenomen uit `/home/shark/gpx`
-(container `gpx-drinkwaterpunten`):
+(container `gpx-drinkwaterpunten`), maar vereenvoudigd:
 
-- Ligt de route grotendeels in Nederland (`nl_share >= 0.8`), dan wordt
-  drinkwaterpunten.nl gebruikt, anders OpenStreetMap via Overpass.
+- Alle routes van de club liggen in Nederland, dus is **drinkwaterpunten.nl
+  de enige bron**. Het oude OSM/Overpass-alternatief (`osm_service.py`) en de
+  `source`-keuze (`auto`/`nl`/`osm`) zijn verwijderd, evenals de nu ongebruikte
+  `nl_share`/`in_netherlands`-hulpfuncties in `geo.py`.
+- Standaard zoekradius is **100 m** (`default_radius_m`, ook het
+  standaardpunt van de slider in `WaterDialog.tsx`).
 - Punten binnen `radius_m` van de route worden gekoppeld, ontdubbeld en op
   rijrichting gesorteerd.
 - Er komt een waarschuwing bij een "droog" stuk langer dan `gap_warning_km`.

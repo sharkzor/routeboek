@@ -303,7 +303,6 @@ class WaterResult(BaseModel):
     filename: str
     source: str
     radius_m: int
-    nl_share: float
     stats: WaterStats
     water_points: list[WaterPointOut]
 
