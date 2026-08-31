@@ -229,3 +229,6 @@ __marimo__/
 /backend/app/static/
 # Devvenv voor migraties
 /.devvenv/
+
+# TypeScript incrementele build-cache
+frontend/tsconfig.tsbuildinfo

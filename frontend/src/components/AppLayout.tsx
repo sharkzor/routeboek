@@ -23,6 +23,7 @@ import {
 } from "@tabler/icons-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 
+import BrandLogo from "./BrandLogo";
 import { useAuth } from "../auth/AuthContext";
 
 const NAV_ITEMS = [
@@ -62,13 +63,11 @@ export default function AppLayout() {
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap="lg" wrap="nowrap">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Link to="/" style={{ display: "flex", alignItems: "center" }}>
-              <img
-                src="/brand/routeboek-logo.png"
-                alt="Routeboek"
-                height={26}
-                style={{ display: "block" }}
-              />
+            <Link
+              to="/"
+              style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
+            >
+              <BrandLogo />
             </Link>
             <Group gap="xs" visibleFrom="sm">
               {NAV_ITEMS.map((item) => (

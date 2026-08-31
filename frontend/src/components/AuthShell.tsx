@@ -1,5 +1,7 @@
-import { Box, Center, Image, Paper, Stack, Text } from "@mantine/core";
+import { Box, Center, Paper, Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
+
+import BrandLogo from "./BrandLogo";
 
 /** Rode achtergrond met logo; gedeeld door alle in- en uitlogschermen. */
 export default function AuthShell({
@@ -17,12 +19,7 @@ export default function AuthShell({
     <Box className="rb-auth-page">
       <Stack w="100%" maw={430} gap="md">
         <Center>
-          <Image
-            src="/brand/routeboek-logo-white.png"
-            alt="Routeboek"
-            w={220}
-            fit="contain"
-          />
+          <BrandLogo variant="light" layout="stacked" />
         </Center>
 
         <Paper p="xl" radius="md" shadow="lg" bg="white">

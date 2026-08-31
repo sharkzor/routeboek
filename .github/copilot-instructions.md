@@ -288,6 +288,13 @@ adminrechten toekennen.
   - primair rood `#F4244E`, accentblauw voor actieknoppen
   - font **Archivo** (Google Fonts)
   - rode header met topografisch lijnenpatroon, witte kaarten met zachte schaduw
+- De app heet naar de gebruiker toe **"Stampers Routeboek"** (nooit
+  "routeboek.cc" — dat is de oude site). De merknaam staat in één component:
+  `src/components/BrandLogo.tsx`, met `layout="stacked"` (clublogo in wit boven
+  het woord ROUTEBOEK) voor `AuthShell` en `layout="inline"` (tekstlockup) voor
+  de header in `AppLayout`. Het clublogo `public/brand/stampers-logo.png` is
+  zwarte lijnkunst met transparantie en wordt met een CSS-filter gewit; er is dus
+  maar één bestand nodig. De oude `routeboek-logo*.png` zijn verwijderd.
 - Mantine-theming staat centraal in `src/theme.ts`; geen losse hardgecodeerde
   kleuren in componenten.
 - Leaflet en de kaartweergave worden lui geladen (`lazy(() => import(...))` in
