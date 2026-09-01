@@ -1,10 +1,10 @@
 """Community routes: leden uploaden zelf routes, anderen stemmen erop.
 
-Elk ingelogd (geverifieerd) lid mag een route aanleveren (GPX-upload of een
-link die zelf een GPX oplevert), de metadata invullen en op elkaars
-inzendingen stemmen. Een beheerder promoveert een goede inzending naar het
-officiële routeboek (`POST /api/admin/routes/{id}/promote`) of verwijdert 'm
-via de bestaande admin-routes (dezelfde tabel, dus dezelfde endpoints).
+Elk ingelogd (geverifieerd) lid mag een route aanleveren (GPX-upload), de
+metadata invullen en op elkaars inzendingen stemmen. Een beheerder promoveert
+een goede inzending naar het officiële routeboek
+(`POST /api/admin/routes/{id}/promote`) of verwijdert 'm via de bestaande
+admin-routes (dezelfde tabel, dus dezelfde endpoints).
 
 Community routes zijn gewone `Route`-rijen met `origin="community"`: ze
 gebruiken daardoor automatisch alle bestaande route-functionaliteit
@@ -15,14 +15,14 @@ splitsen op origin.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import current_user
 from app.models import Route, RouteOrigin, RouteUpvote, User
-from app.route_import import RouteImportError, import_from_gpx_bytes, import_from_url
+from app.route_import import RouteImportError, import_from_gpx_bytes
 from app.routers.routes import get_route_or_404, to_detail, to_summary
 from app.routes_common import slugify, unique_slug
 from app.schemas import (
@@ -72,24 +72,15 @@ def list_community_routes(
 
 @router.post("/routes/import", response_model=RouteImportPreview)
 async def import_route(
-    gpx: UploadFile | None = File(default=None),
-    url: str | None = Form(default=None),
+    gpx: UploadFile = File(...),
     _: User = Depends(current_user),
 ) -> RouteImportPreview:
-    if bool(gpx) == bool(url and url.strip()):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Upload een GPX-bestand of vul een link in (niet allebei).",
-        )
     try:
-        if gpx is not None:
-            raw = await gpx.read()
-            name_guess = None
-            if gpx.filename:
-                name_guess = gpx.filename.rsplit(".", 1)[0].replace("_", " ").strip() or None
-            result = import_from_gpx_bytes(raw, suggested_name=name_guess)
-        else:
-            result = import_from_url(url)  # type: ignore[arg-type]
+        raw = await gpx.read()
+        name_guess = None
+        if gpx.filename:
+            name_guess = gpx.filename.rsplit(".", 1)[0].replace("_", " ").strip() or None
+        result = import_from_gpx_bytes(raw, suggested_name=name_guess)
     except RouteImportError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

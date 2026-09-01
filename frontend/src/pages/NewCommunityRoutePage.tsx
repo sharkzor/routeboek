@@ -8,7 +8,6 @@ import {
   Group,
   MultiSelect,
   Select,
-  SegmentedControl,
   Stack,
   Stepper,
   Text,
@@ -17,7 +16,7 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconArrowUpRight, IconBike, IconLink, IconUpload } from "@tabler/icons-react";
+import { IconArrowUpRight, IconBike, IconUpload } from "@tabler/icons-react";
 import { useNavigate } from "react-router";
 
 import { ApiError, api } from "../api/client";
@@ -31,16 +30,12 @@ import {
   type WindCode,
 } from "../api/types";
 
-type ImportMethod = "gpx" | "url";
-
 export default function NewCommunityRoutePage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
 
   // Stap 1: importeren
-  const [method, setMethod] = useState<ImportMethod>("gpx");
   const [file, setFile] = useState<File | null>(null);
-  const [url, setUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RouteImportPreview | null>(null);
@@ -56,13 +51,11 @@ export default function NewCommunityRoutePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const runImport = async () => {
+    if (!file) return;
     setImportError(null);
     setImporting(true);
     try {
-      const result =
-        method === "gpx" && file
-          ? await api.importCommunityRouteGpx(file)
-          : await api.importCommunityRouteUrl(url.trim());
+      const result = await api.importCommunityRouteGpx(file);
       setPreview(result);
       setName(result.name ?? "");
       setWind(result.wind_directions);
@@ -73,8 +66,6 @@ export default function NewCommunityRoutePage() {
       setImporting(false);
     }
   };
-
-  const canImport = method === "gpx" ? file !== null : url.trim().length > 4;
 
   const save = async () => {
     if (!preview) return;
@@ -120,47 +111,27 @@ export default function NewCommunityRoutePage() {
 
       <Card withBorder radius="md" p="lg">
         <Stepper active={step} color="routeboek" onStepClick={setStep} allowNextStepsSelect={false}>
-          <Stepper.Step label="Route importeren" description="GPX of link">
+          <Stepper.Step label="Route importeren" description="GPX-bestand">
             <Stack gap="md" mt="md">
               {importError && (
                 <Alert color="red" variant="light">
                   {importError}
                 </Alert>
               )}
-              <SegmentedControl
-                value={method}
-                onChange={(value) => setMethod(value as ImportMethod)}
-                data={[
-                  { value: "gpx", label: "GPX-bestand" },
-                  { value: "url", label: "Link (GPX-export)" },
-                ]}
+              <FileInput
+                label="GPX-bestand"
+                description="Exporteer je route als GPX (bijvoorbeeld vanuit Strava of Komoot: 'Exporteren'/'Downloaden als GPX') en upload het bestand hier."
+                placeholder="Kies een .gpx bestand"
+                accept=".gpx,application/gpx+xml"
+                leftSection={<IconUpload size={16} />}
+                value={file}
+                onChange={setFile}
               />
-              {method === "gpx" ? (
-                <FileInput
-                  label="GPX-bestand"
-                  placeholder="Kies een .gpx bestand"
-                  accept=".gpx,application/gpx+xml"
-                  leftSection={<IconUpload size={16} />}
-                  value={file}
-                  onChange={setFile}
-                />
-              ) : (
-                <>
-                  <TextInput
-                    label="Link naar een GPX-bestand"
-                    description="Bijvoorbeeld een 'exporteer als GPX'-link met deelsleutel uit Komoot. Een kale Strava- of Komoot-paginalink werkt niet: die sites tonen de route alleen aan ingelogde gebruikers. Exporteer in dat geval de GPX en upload die hierboven."
-                    placeholder="https://..."
-                    leftSection={<IconLink size={16} />}
-                    value={url}
-                    onChange={(event) => setUrl(event.currentTarget.value)}
-                  />
-                </>
-              )}
               <Group justify="flex-end">
                 <Button
                   color="routeboek"
                   loading={importing}
-                  disabled={!canImport}
+                  disabled={!file}
                   onClick={() => void runImport()}
                 >
                   Route importeren

@@ -225,14 +225,6 @@ export const api = {
       body: form,
     });
   },
-  importCommunityRouteUrl: (url: string) => {
-    const form = new FormData();
-    form.append("url", url);
-    return request<RouteImportPreview>("/api/community/routes/import", {
-      method: "POST",
-      body: form,
-    });
-  },
   createCommunityRoute: (payload: CommunityRouteCreateIn) =>
     request<RouteDetail>("/api/community/routes", { method: "POST", ...json(payload) }),
   upvoteRoute: (routeId: number) =>

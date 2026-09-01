@@ -81,7 +81,7 @@ routeboek/
 │       ├── deps.py                   FastAPI-dependencies (auth-guards)
 │       ├── seed.py                   import van data/seed/routes.json
 │       ├── routes_common.py          gedeeld: slugify, unique_slug, track_stats
-│       ├── route_import.py           GPX/URL-import + SSRF-bescherming (community routes)
+│       ├── route_import.py           GPX-import (community routes; bewust geen URL-import)
 │       ├── main.py                   app-factory, static hosting, SPA-fallback
 │       ├── routers/
 │       │   ├── auth.py               registratie, login, verificatie, reset
@@ -354,32 +354,24 @@ niets meer dan `origin` terugzetten op `"official"`
 (`POST /api/admin/routes/{id}/promote`, alleen voor admins).
 
 - **Twee-staps wizard** (`app/routers/community.py`,
-  `frontend/src/pages/NewCommunityRoutePage.tsx`): stap 1 importeert een
-  route (GPX-upload of een URL die rechtstreeks GPX-content teruggeeft) en
-  toont een preview (naam, afstand, hoogtemeters, geschatte windrichting)
-  zónder iets op te slaan; stap 2 laat de aanbieder de metadata aanvullen
-  (naam, beschrijving, soort, windrichting, categorieën, Strava-link) en
-  slaat pas dan de route op (`POST /api/community/routes`).
-- **Geen Strava/Komoot-scraping.** Komoot blokkeert zowel de onofficiële API
-  als tourpagina's met 403, ook voor bekende publieke tour-ID's. Strava's
-  routepagina's zijn een client-side gerenderde shell zonder embedded data;
-  de echte data komt via een geauthenticeerde XHR-call binnen, dus
-  server-side ophalen zonder ingelogde sessie werkt niet. In plaats van iets
-  fragiels te bouwen krijgt de gebruiker bij een kale Strava/Komoot-link een
-  duidelijke Nederlandse foutmelding die aanraadt de GPX te exporteren en te
-  uploaden. Een link die wél rechtstreeks GPX teruggeeft (bv. een
-  Komoot-deelsleutel-exportlink) werkt gewoon via de generieke
-  URL-importer.
-- **SSRF-bescherming is verplicht** voor `import_from_url()` in
-  `app/route_import.py`, want dit endpoint laat de server een door de
-  gebruiker opgegeven URL ophalen: scheme-allowlist (alleen http/https),
-  DNS-resolutie + weigering van private/loopback/link-local/multicast/
-  reserved/unspecified IP's via de `ipaddress`-module, **handmatig**
-  redirects volgen (max. 5 hops, elke hop opnieuw gevalideerd — vertrouw
-  nooit op de automatische redirect-afhandeling van `requests` bij
-  user-supplied URL's), een gestreamde download met een harde limiet van
-  20 MB (`MAX_IMPORT_BYTES`) en een timeout van 10s. Voeg nooit een nieuw
-  server-side "haal deze URL op"-endpoint toe zonder dezelfde bescherming.
+  `frontend/src/pages/NewCommunityRoutePage.tsx`): stap 1 uploadt een
+  GPX-bestand en toont een preview (naam, afstand, hoogtemeters, geschatte
+  windrichting) zónder iets op te slaan; stap 2 laat de aanbieder de
+  metadata aanvullen (naam, beschrijving, soort, windrichting, categorieën,
+  optioneel een Strava-link als losse referentie) en slaat pas dan de route
+  op (`POST /api/community/routes`).
+- **Geen link/URL-import.** Er is bewust géén "importeer via Strava/Komoot-
+  link"-optie: Komoot blokkeert zowel de onofficiële API als tourpagina's
+  met 403 (ook voor bekende publieke tour-ID's), en Strava's routepagina's
+  zijn een client-side gerenderde shell zonder embedded data — de echte
+  data komt alleen binnen via een geauthenticeerde XHR-call. Server-side
+  ophalen van zo'n link levert dus nooit een route op; een eerdere versie
+  bood dit tijdelijk aan (met SSRF-bescherming) maar leverde in de praktijk
+  alleen een foutmelding op, dus is de optie weer verwijderd. **Voeg 'm niet
+  opnieuw toe** zonder dat Strava/Komoot een publieke, aanmeldingsvrije
+  export-API bieden. Wil een gebruiker toch de link erbij? Dat kan al: stap 2
+  heeft een los, optioneel "Strava-link"-veld (`Route.strava_url`) dat
+  gewoon als referentie bij de geüploade GPX komt te staan.
 - **`Route.upvote_count`** is een gedenormaliseerde teller die bij elke
   stem/intrekking in `RouteUpvote` wordt bij- of afgeteld (niet elke keer
   herberekend); `GET /api/community/routes` levert ook `my_upvote` per

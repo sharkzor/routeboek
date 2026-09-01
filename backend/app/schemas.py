@@ -243,10 +243,6 @@ class RouteUpdateIn(BaseModel):
 # ------------------------------------------------------------- community routes
 
 
-class RouteImportUrlIn(BaseModel):
-    url: str = Field(min_length=4, max_length=2000)
-
-
 class RouteImportPreview(BaseModel):
     """Resultaat van stap 1: GPX gelezen, nog niets opgeslagen."""
 
