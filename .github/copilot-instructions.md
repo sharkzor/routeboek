@@ -426,6 +426,22 @@ niets meer dan `origin` terugzetten op `"official"`
   dat officiële en community-routes samenvoegt (community-opties krijgen het
   label-suffix " · Community") zodat iedereen ook een rit kan organiseren
   vanuit een community-route.
+- **Eigen community-routes verwijderen** (`DELETE
+  /api/community/routes/{id}`, `app/routers/community.py`): de aanbieder
+  zelf óf een admin mag een community-inzending intrekken. Dit is bewust
+  een **échte verwijdering** (i.t.t. `admin.py`'s `delete_route()`, die
+  standaard alleen archiveert) — een community-route heeft geen historische
+  waarde zoals een officiële route, dus mag gewoon weg als 'ie verkeerd of
+  dubbel is aangeleverd. Guards: alleen toegestaan zolang `origin ==
+  community` (eenmaal gepromoveerd tot officieel loopt verwijderen via het
+  admin-endpoint, niet hier); alleen de aanbieder (`created_by_id ==
+  user.id`) of `user.is_admin`, anders 403. `Ride.route_id` staat op
+  `ondelete=SET NULL` (ritten overleven het verwijderen van hun route),
+  `RouteRating`/`RouteComment`/`RouteUpvote` staan op `ondelete=CASCADE`
+  (geen wezen-rijen). De frontend krijgt via `RouteSummary.can_delete`
+  (server-side berekend in `to_summary()`/`to_detail()` op basis van de
+  ingelogde gebruiker) te zien of de verwijderknop getoond moet worden —
+  géén losse frontend-logica op basis van namen of ID's.
 
 ---
 

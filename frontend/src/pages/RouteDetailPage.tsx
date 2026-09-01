@@ -9,6 +9,7 @@ import {
   Center,
   Group,
   Loader,
+  Modal,
   Paper,
   SimpleGrid,
   Stack,
@@ -26,6 +27,7 @@ import {
   IconDownload,
   IconDroplet,
   IconThumbUp,
+  IconTrash,
   IconTrophy,
 } from "@tabler/icons-react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -57,6 +59,8 @@ export default function RouteDetailPage() {
   const [waterOpened, waterDialog] = useDisclosure(false);
   const [voting, setVoting] = useState(false);
   const [promoting, setPromoting] = useState(false);
+  const [deleteOpened, deleteModal] = useDisclosure(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,6 +156,24 @@ export default function RouteDetailPage() {
     }
   };
 
+  const deleteRoute = async () => {
+    if (!route) return;
+    setDeleting(true);
+    try {
+      await api.deleteCommunityRoute(route.id);
+      notifications.show({ message: "Route is verwijderd.", color: "green" });
+      navigate("/community");
+    } catch (err) {
+      notifications.show({
+        message: err instanceof ApiError ? err.message : "Verwijderen is mislukt.",
+        color: "red",
+      });
+    } finally {
+      setDeleting(false);
+      deleteModal.close();
+    }
+  };
+
   return (
     <Stack gap="lg">
       <Anchor component={Link} to="/routes" c="dimmed" size="sm">
@@ -205,6 +227,16 @@ export default function RouteDetailPage() {
               onClick={() => void promote()}
             >
               Promoveren naar routeboek
+            </Button>
+          )}
+          {route.can_delete && (
+            <Button
+              variant="light"
+              color="red"
+              leftSection={<IconTrash size={18} />}
+              onClick={deleteModal.open}
+            >
+              Verwijderen
             </Button>
           )}
           <Button
@@ -346,6 +378,24 @@ export default function RouteDetailPage() {
         onClose={waterDialog.close}
         onResult={setWater}
       />
+
+      <Modal opened={deleteOpened} onClose={deleteModal.close} title="Route verwijderen">
+        <Stack gap="md">
+          <Text size="sm">
+            Weet je zeker dat je <strong>{route.name}</strong> wilt verwijderen? Dit kan niet
+            ongedaan worden gemaakt. Ritten die naar deze route verwijzen blijven bestaan, maar
+            verliezen de koppeling.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={deleteModal.close}>
+              Annuleren
+            </Button>
+            <Button color="red" loading={deleting} onClick={() => void deleteRoute()}>
+              Verwijderen
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <CommentsSection routeId={route.id} />
     </Stack>

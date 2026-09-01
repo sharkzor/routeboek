@@ -46,6 +46,7 @@ export interface RouteSummary {
   upvote_count: number;
   submitted_by: string | null;
   my_upvote: boolean;
+  can_delete: boolean;
 }
 
 export interface RouteDetail extends RouteSummary {

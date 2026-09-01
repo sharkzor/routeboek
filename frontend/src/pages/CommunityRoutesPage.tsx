@@ -6,6 +6,7 @@ import {
   Card,
   Group,
   Image,
+  Modal,
   SimpleGrid,
   Skeleton,
   Stack,
@@ -13,6 +14,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconArrowUpRight,
@@ -20,6 +22,7 @@ import {
   IconPlus,
   IconSearch,
   IconThumbUp,
+  IconTrash,
 } from "@tabler/icons-react";
 import { Link } from "react-router";
 
@@ -30,6 +33,9 @@ export default function CommunityRoutesPage() {
   const [routes, setRoutes] = useState<RouteSummary[] | null>(null);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<RouteSummary | null>(null);
+  const [deleteOpened, deleteModal] = useDisclosure(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async (query?: string) => {
     try {
@@ -63,6 +69,30 @@ export default function CommunityRoutesPage() {
         message: err instanceof ApiError ? err.message : "Stemmen is mislukt.",
         color: "red",
       });
+    }
+  };
+
+  const confirmDelete = (route: RouteSummary) => {
+    setPending(route);
+    deleteModal.open();
+  };
+
+  const deleteRoute = async () => {
+    if (!pending) return;
+    setDeleting(true);
+    try {
+      await api.deleteCommunityRoute(pending.id);
+      setRoutes((current) => (current ? current.filter((r) => r.id !== pending.id) : current));
+      notifications.show({ message: "Route is verwijderd.", color: "green" });
+    } catch (err) {
+      notifications.show({
+        message: err instanceof ApiError ? err.message : "Verwijderen is mislukt.",
+        color: "red",
+      });
+    } finally {
+      setDeleting(false);
+      deleteModal.close();
+      setPending(null);
     }
   };
 
@@ -138,6 +168,16 @@ export default function CommunityRoutesPage() {
                     <Text size="sm" fw={600}>
                       {route.upvote_count}
                     </Text>
+                    {route.can_delete && (
+                      <ActionIcon
+                        variant="light"
+                        color="red"
+                        onClick={() => confirmDelete(route)}
+                        aria-label="Verwijder deze route"
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    )}
                   </Group>
                 </Group>
 
@@ -177,6 +217,23 @@ export default function CommunityRoutesPage() {
           ))}
         </SimpleGrid>
       )}
+
+      <Modal opened={deleteOpened} onClose={deleteModal.close} title="Route verwijderen">
+        <Stack gap="md">
+          <Text size="sm">
+            Weet je zeker dat je <strong>{pending?.name}</strong> wilt verwijderen? Dit kan niet
+            ongedaan worden gemaakt.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={deleteModal.close}>
+              Annuleren
+            </Button>
+            <Button color="red" loading={deleting} onClick={() => void deleteRoute()}>
+              Verwijderen
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

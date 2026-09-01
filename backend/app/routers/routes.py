@@ -40,13 +40,18 @@ def media_url(route: Route, kind: str) -> str | None:
     return None
 
 
-def to_summary(route: Route, my_upvote: bool = False) -> RouteSummary:
+def to_summary(route: Route, my_upvote: bool = False, viewer: User | None = None) -> RouteSummary:
     # Lazy load van created_by kost alleen een extra query bij community routes
     # (klein aantal); voor de officiële lijst (verreweg de meeste rijen) wordt
     # dit nooit aangeraakt.
     submitted_by = None
     if route.origin == RouteOrigin.community and route.created_by:
         submitted_by = route.created_by.display_name
+    can_delete = (
+        route.origin == RouteOrigin.community
+        and viewer is not None
+        and (route.created_by_id == viewer.id or viewer.is_admin)
+    )
     return RouteSummary(
         id=route.id,
         slug=route.slug,
@@ -67,6 +72,7 @@ def to_summary(route: Route, my_upvote: bool = False) -> RouteSummary:
         upvote_count=route.upvote_count,
         submitted_by=submitted_by,
         my_upvote=my_upvote,
+        can_delete=can_delete,
     )
 
 
@@ -153,8 +159,13 @@ def list_routes(
     )
 
 
-def to_detail(route: Route, my_rating: int | None = None, my_upvote: bool = False) -> RouteDetail:
-    summary = to_summary(route, my_upvote=my_upvote)
+def to_detail(
+    route: Route,
+    my_rating: int | None = None,
+    my_upvote: bool = False,
+    viewer: User | None = None,
+) -> RouteDetail:
+    summary = to_summary(route, my_upvote=my_upvote, viewer=viewer)
     return RouteDetail(
         **summary.model_dump(),
         description_html=route.description_html,
@@ -195,7 +206,10 @@ def route_detail(
             is not None
         )
     return to_detail(
-        route, my_rating=existing.value if existing else None, my_upvote=my_upvote
+        route,
+        my_rating=existing.value if existing else None,
+        my_upvote=my_upvote,
+        viewer=user,
     )
 
 

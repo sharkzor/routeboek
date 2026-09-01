@@ -118,6 +118,7 @@ class RouteSummary(BaseModel):
     upvote_count: int = 0
     submitted_by: str | None = None
     my_upvote: bool = False
+    can_delete: bool = False
 
 
 class RouteDetail(RouteSummary):

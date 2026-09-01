@@ -231,6 +231,8 @@ export const api = {
     request<UpvoteResult>(`/api/community/routes/${routeId}/upvote`, { method: "POST" }),
   removeUpvote: (routeId: number) =>
     request<UpvoteResult>(`/api/community/routes/${routeId}/upvote`, { method: "DELETE" }),
+  deleteCommunityRoute: (routeId: number) =>
+    request<{ detail: string }>(`/api/community/routes/${routeId}`, { method: "DELETE" }),
 
   // ---------------------------------------------------------------- ritten
   members: () => request<UserSummary[]>("/api/users"),
