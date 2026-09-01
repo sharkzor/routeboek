@@ -150,6 +150,8 @@ export interface WeatherHour {
   weather_code: number;
   wind_speed_kmh: number;
   wind_direction_deg: number;
+  wind_beaufort: number;
+  wind_compass: string;
   is_day: boolean;
 }
 

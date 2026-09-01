@@ -324,6 +324,15 @@ oude routeboek.cc (`weer.png`).
   kortlevende voorspeldata gaat, niet om een stabiele bron.
 - **Venster van 4 uur** rond het vertrektijdstip (1 uur ervoor t/m 2 uur
   erna, `hours_around()`), net als de 4 blokjes in het oude routeboek.cc.
+- **Windrichting en -kracht in NL-conventie, niet ruwe km/u/graden**:
+  Open-Meteo levert windsnelheid in km/u en richting in graden; dat is
+  omgerekend naar de Beaufort-schaal (`beaufort_from_kmh()`, 0-12) en een
+  8-punts kompasrichting (`compass_from_degrees()`, N/NO/O/ZO/Z/ZW/W/NW —
+  zelfde stijl als `Route.wind_directions`). Dit is voor een NL-wielerclub
+  het belangrijkste onderdeel van het weerbericht (mee- of tegenwind, hoe
+  hard). De pijl in `WeatherStrip.tsx` staat gedraaid naar de richting
+  waar de wind ​naartoe​ waait (dus `wind_direction_deg + 180°`, want
+  Open-Meteo geeft de richting waar de wind ​vandaan​ komt).
 - **Layout bewust lui/inklapbaar**, niet standaard open: een
   "Weerbericht"-knop (zelfde patroon als "Wie gaan er mee?") die pas bij
   klikken de weersverwachting ophaalt en toont als een horizontaal

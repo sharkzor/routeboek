@@ -371,6 +371,8 @@ class WeatherHourOut(BaseModel):
     weather_code: int
     wind_speed_kmh: float
     wind_direction_deg: float
+    wind_beaufort: int
+    wind_compass: str
     is_day: bool
 
 

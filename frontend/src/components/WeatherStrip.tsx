@@ -1,5 +1,6 @@
 import { Group, Loader, Paper, ScrollArea, Stack, Text } from "@mantine/core";
 import {
+  IconArrowUp,
   IconCloud,
   IconCloudFog,
   IconCloudRain,
@@ -72,7 +73,7 @@ export function WeatherStrip({ loading, hours }: WeatherStripProps) {
             withBorder
             radius="md"
             p="xs"
-            style={{ minWidth: 68, flexShrink: 0, textAlign: "center" }}
+            style={{ minWidth: 88, flexShrink: 0, textAlign: "center" }}
           >
             <Stack gap={2} align="center">
               <Text size="xs" c="dimmed">
@@ -85,9 +86,25 @@ export function WeatherStrip({ loading, hours }: WeatherStripProps) {
               <Text size="xs" c="dimmed">
                 {hour.precipitation_probability ?? 0}%
               </Text>
-              <Text size="xs" c="dimmed">
-                {Math.round(hour.wind_speed_kmh)} km/u
-              </Text>
+              <Group gap={3} justify="center" wrap="nowrap">
+                <IconArrowUp
+                  size={14}
+                  color="var(--mantine-color-gray-6)"
+                  style={{
+                    // wind_direction_deg is de richting waar de wind
+                    // vandaan komt; +180° laat de pijl zien waar de wind
+                    // naartoe waait (intuïtiever: "de wind duwt je deze
+                    // kant op").
+                    transform: `rotate(${hour.wind_direction_deg + 180}deg)`,
+                  }}
+                />
+                <Text size="xs" fw={600}>
+                  {hour.wind_compass}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {hour.wind_beaufort} Bft
+                </Text>
+              </Group>
             </Stack>
           </Paper>
         ))}

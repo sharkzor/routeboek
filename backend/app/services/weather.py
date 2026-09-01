@@ -31,6 +31,28 @@ _LOCK = threading.Lock()
 _CACHE: dict[str, tuple[float, list[dict]]] = {}
 
 
+def beaufort_from_kmh(kmh: float) -> int:
+    """Zet windsnelheid (km/u) om naar de Beaufort-schaal (0-12), zoals in NL
+    gebruikelijk i.p.v. km/u of m/s."""
+    # Bovengrenzen in km/u per Beaufort-kracht 0 t/m 11; 118+ is kracht 12.
+    thresholds = [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118]
+    for force, upper in enumerate(thresholds):
+        if kmh < upper:
+            return force
+    return 12
+
+
+_COMPASS_POINTS = ["N", "NO", "O", "ZO", "Z", "ZW", "W", "NW"]
+
+
+def compass_from_degrees(deg: float) -> str:
+    """Zet een windrichting in graden om naar een 8-punts kompasrichting
+    (N/NO/O/ZO/Z/ZW/W/NW), passend bij de Nederlandse windrichting-notatie
+    die ook bij routes wordt gebruikt (Route.wind_directions)."""
+    index = round((deg % 360) / 45) % 8
+    return _COMPASS_POINTS[index]
+
+
 def _cache_key(lat: float, lon: float, target_date: date) -> str:
     # Afronden op ~1km nauwkeurigheid is ruim genoeg voor een weersverwachting.
     return f"{lat:.2f}:{lon:.2f}:{target_date.isoformat()}"
@@ -93,6 +115,12 @@ def get_hourly_forecast(
                     "weather_code": hourly["weather_code"][i],
                     "wind_speed_kmh": hourly["wind_speed_10m"][i],
                     "wind_direction_deg": hourly["wind_direction_10m"][i],
+                    "wind_beaufort": beaufort_from_kmh(
+                        hourly["wind_speed_10m"][i]
+                    ),
+                    "wind_compass": compass_from_degrees(
+                        hourly["wind_direction_10m"][i]
+                    ),
                     "is_day": bool(hourly["is_day"][i]),
                 }
             )
