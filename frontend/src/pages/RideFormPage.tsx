@@ -104,7 +104,7 @@ export default function RideFormPage() {
     const bootstrap = async () => {
       try {
         const [allRoutes, memberList] = await Promise.all([
-          api.allRoutes(),
+          api.allRoutesForRideForm(),
           api.members(),
         ]);
         if (cancelled) return;
@@ -255,8 +255,8 @@ export default function RideFormPage() {
                 value: String(route.id),
                 label:
                   route.distance_km !== null
-                    ? `${route.name} (${route.distance_km.toFixed(0)} km)`
-                    : route.name,
+                    ? `${route.name} (${route.distance_km.toFixed(0)} km)${route.origin === "community" ? " · Community" : ""}`
+                    : `${route.name}${route.origin === "community" ? " · Community" : ""}`,
               }))}
               value={form.values.route_id || null}
               onChange={pickRoute}

@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
-import unicodedata
 
 from fastapi import (
     APIRouter,
@@ -22,8 +20,9 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.deps import current_admin
-from app.models import Route, RouteType, User, utcnow
+from app.models import Route, RouteOrigin, RouteType, User, utcnow
 from app.routers.routes import to_detail, to_summary
+from app.routes_common import slugify, track_stats, unique_slug
 from app.schemas import (
     AdminUserUpdateIn,
     Message,
@@ -35,44 +34,11 @@ from app.schemas import (
 )
 from app.security import revoke_all_sessions
 from app.water import gpx_service
-from app.water.geo import haversine_m
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
-
-
-def slugify(value: str) -> str:
-    text = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
-    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return text[:150] or "route"
-
-
-def unique_slug(db: Session, base: str) -> str:
-    slug = base
-    counter = 2
-    while db.scalar(select(Route.id).where(Route.slug == slug)) is not None:
-        slug = f"{base}-{counter}"
-        counter += 1
-    return slug
-
-
-def _track_stats(points) -> tuple[float, int]:
-    """Afstand in km (great-circle) en totale stijging in meters."""
-    distance = 0.0
-    for a, b in zip(points, points[1:]):
-        distance += haversine_m(a.lat, a.lon, b.lat, b.lon)
-
-    elevation = 0.0
-    previous: float | None = None
-    for point in points:
-        if point.ele is None:
-            continue
-        if previous is not None and point.ele > previous:
-            elevation += point.ele - previous
-        previous = point.ele
-    return round(distance / 1000.0, 1), int(round(elevation))
 
 
 # ------------------------------------------------------------------- routes
@@ -120,7 +86,7 @@ async def create_route(
     except gpx_service.GpxError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    distance_km, elevation_m = _track_stats(points)
+    distance_km, elevation_m = track_stats(points)
     slug = unique_slug(db, slugify(meta.name))
 
     target = settings.media_dir / "gpx" / f"{slug}.gpx"
@@ -215,6 +181,24 @@ def delete_route(
     db.commit()
     logger.info("Route '%s' definitief verwijderd door %s", route.slug, admin.email)
     return Message(detail=f"Route '{route.name}' is definitief verwijderd.")
+
+
+@router.post("/routes/{route_id}/promote", response_model=RouteSummary)
+def promote_route(
+    route_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(current_admin),
+) -> RouteSummary:
+    """Verplaats een community-route naar het officiële routeboek."""
+    route = db.get(Route, route_id)
+    if route is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Deze route bestaat niet."
+        )
+    route.origin = RouteOrigin.official
+    db.commit()
+    logger.info("Community-route '%s' gepromoveerd door %s", route.slug, admin.email)
+    return to_summary(route)
 
 
 @router.get("/routes", response_model=list[RouteSummary])

@@ -114,6 +114,10 @@ class RouteSummary(BaseModel):
     has_gpx: bool = False
     has_tcx: bool = False
     is_active: bool = True
+    origin: str = "official"
+    upvote_count: int = 0
+    submitted_by: str | None = None
+    my_upvote: bool = False
 
 
 class RouteDetail(RouteSummary):
@@ -234,6 +238,68 @@ class RouteUpdateIn(BaseModel):
     @classmethod
     def _strava(cls, value: str | None) -> str | None:
         return _normalize_url(value)
+
+
+# ------------------------------------------------------------- community routes
+
+
+class RouteImportUrlIn(BaseModel):
+    url: str = Field(min_length=4, max_length=2000)
+
+
+class RouteImportPreview(BaseModel):
+    """Resultaat van stap 1: GPX gelezen, nog niets opgeslagen."""
+
+    name: str | None
+    distance_km: float
+    elevation_m: int
+    coordinates: list[list[float]]
+    wind_directions: list[str]
+
+
+class CommunityRouteCreateIn(BaseModel):
+    """Stap 2: metadata + de in stap 1 opgehaalde coördinaten."""
+
+    name: str = Field(min_length=2, max_length=200)
+    description_html: str = ""
+    route_type: RouteType = RouteType.road
+    wind_directions: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
+    strava_url: str | None = None
+    distance_km: float = Field(ge=0, le=400)
+    elevation_m: int = Field(ge=0, le=6000)
+    coordinates: list[list[float]] = Field(min_length=2, max_length=20_000)
+
+    @field_validator("wind_directions")
+    @classmethod
+    def _winds(cls, value: list[str]) -> list[str]:
+        return _normalize_winds(value)
+
+    @field_validator("categories")
+    @classmethod
+    def _cats(cls, value: list[str]) -> list[str]:
+        return _normalize_categories(value)
+
+    @field_validator("strava_url")
+    @classmethod
+    def _strava(cls, value: str | None) -> str | None:
+        return _normalize_url(value)
+
+    @field_validator("coordinates")
+    @classmethod
+    def _coords(cls, value: list[list[float]]) -> list[list[float]]:
+        for point in value:
+            if len(point) != 2:
+                raise ValueError("Elke coördinaat moet uit [lat, lon] bestaan.")
+            lat, lon = point
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                raise ValueError("Ongeldige coördinaat.")
+        return value
+
+
+class UpvoteOut(BaseModel):
+    upvote_count: int
+    my_upvote: bool
 
 
 # --------------------------------------------------------------------- ritten

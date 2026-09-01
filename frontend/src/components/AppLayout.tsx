@@ -19,6 +19,7 @@ import {
   IconSettings,
   IconShieldCog,
   IconUser,
+  IconUsers,
 } from "@tabler/icons-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 
@@ -28,6 +29,7 @@ import { useAuth } from "../auth/AuthContext";
 const NAV_ITEMS = [
   { to: "/", label: "Routes", icon: IconMap2 },
   { to: "/ritten", label: "Ritten", icon: IconBike },
+  { to: "/community", label: "Community", icon: IconUsers },
 ];
 
 export default function AppLayout() {

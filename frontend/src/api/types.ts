@@ -42,6 +42,10 @@ export interface RouteSummary {
   has_gpx: boolean;
   has_tcx: boolean;
   is_active: boolean;
+  origin: "official" | "community";
+  upvote_count: number;
+  submitted_by: string | null;
+  my_upvote: boolean;
 }
 
 export interface RouteDetail extends RouteSummary {
@@ -50,6 +54,31 @@ export interface RouteDetail extends RouteSummary {
   coordinates: [number, number][];
   created_at: string;
   my_rating: number | null;
+}
+
+export interface RouteImportPreview {
+  name: string | null;
+  distance_km: number;
+  elevation_m: number;
+  coordinates: [number, number][];
+  wind_directions: WindCode[];
+}
+
+export interface CommunityRouteCreateIn {
+  name: string;
+  description_html: string;
+  route_type: RouteType;
+  wind_directions: WindCode[];
+  categories: CategoryCode[];
+  strava_url: string | null;
+  distance_km: number;
+  elevation_m: number;
+  coordinates: [number, number][];
+}
+
+export interface UpvoteResult {
+  upvote_count: number;
+  my_upvote: boolean;
 }
 
 export interface Comment {

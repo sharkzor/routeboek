@@ -35,6 +35,14 @@ class RouteType(str, enum.Enum):
     gravel = "gravel"
 
 
+class RouteOrigin(str, enum.Enum):
+    #: Overgenomen uit routeboek.cc of door een beheerder toegevoegd.
+    official = "official"
+    #: Door een lid geüpload; staat in "Community routes" tot een beheerder
+    #: het promoveert naar het officiële routeboek.
+    community = "community"
+
+
 class RideType(str, enum.Enum):
     race = "race"
     race_gravel = "race_gravel"
@@ -163,6 +171,11 @@ class Route(Base):
 
     source_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    origin: Mapped[RouteOrigin] = mapped_column(
+        Enum(RouteOrigin, name="route_origin"), default=RouteOrigin.official, nullable=False
+    )
+    # Aantal upvotes van leden op een community-route (denormaliseerd, zie RouteUpvote).
+    upvote_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -276,3 +289,24 @@ class RouteComment(Base):
     )
 
     user: Mapped[User] = relationship()
+
+
+class RouteUpvote(Base):
+    """Stem van een lid vóór een community-route, hooguit één per lid."""
+
+    __tablename__ = "route_upvotes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    route_id: Mapped[int] = mapped_column(
+        ForeignKey("routes.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    user: Mapped[User] = relationship()
+
+    __table_args__ = (UniqueConstraint("route_id", "user_id", name="uq_route_upvote_user"),)

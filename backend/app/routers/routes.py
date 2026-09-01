@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.deps import current_user
-from app.models import Route, RouteRating, RouteType, User
+from app.models import Route, RouteOrigin, RouteRating, RouteType, RouteUpvote, User
 from app.schemas import RouteDetail, RoutePage, RouteSummary
 from app.water.processing import build_gpx_from_coordinates
 
@@ -39,7 +39,13 @@ def media_url(route: Route, kind: str) -> str | None:
     return None
 
 
-def to_summary(route: Route) -> RouteSummary:
+def to_summary(route: Route, my_upvote: bool = False) -> RouteSummary:
+    # Lazy load van created_by kost alleen een extra query bij community routes
+    # (klein aantal); voor de officiële lijst (verreweg de meeste rijen) wordt
+    # dit nooit aangeraakt.
+    submitted_by = None
+    if route.origin == RouteOrigin.community and route.created_by:
+        submitted_by = route.created_by.display_name
     return RouteSummary(
         id=route.id,
         slug=route.slug,
@@ -56,6 +62,10 @@ def to_summary(route: Route) -> RouteSummary:
         has_gpx=bool(route.gpx_file) or bool(route.coordinates),
         has_tcx=bool(route.tcx_file),
         is_active=route.is_active,
+        origin=route.origin.value,
+        upvote_count=route.upvote_count,
+        submitted_by=submitted_by,
+        my_upvote=my_upvote,
     )
 
 
@@ -69,7 +79,9 @@ def _apply_filters(
     min_rating: float | None,
     categories: list[str] | None,
 ) -> Select:
-    stmt = stmt.where(Route.is_active.is_(True))
+    # De officiële routebrowsing toont bewust nooit community-inzendingen;
+    # die staan apart onder "Community routes" tot een beheerder ze promoveert.
+    stmt = stmt.where(Route.is_active.is_(True), Route.origin == RouteOrigin.official)
 
     if search:
         pattern = f"%{search.strip()}%"
@@ -140,8 +152,8 @@ def list_routes(
     )
 
 
-def to_detail(route: Route, my_rating: int | None = None) -> RouteDetail:
-    summary = to_summary(route)
+def to_detail(route: Route, my_rating: int | None = None, my_upvote: bool = False) -> RouteDetail:
+    summary = to_summary(route, my_upvote=my_upvote)
     return RouteDetail(
         **summary.model_dump(),
         description_html=route.description_html,
@@ -171,7 +183,19 @@ def route_detail(
             RouteRating.route_id == route.id, RouteRating.user_id == user.id
         )
     )
-    return to_detail(route, my_rating=existing.value if existing else None)
+    my_upvote = False
+    if route.origin == RouteOrigin.community:
+        my_upvote = (
+            db.scalar(
+                select(RouteUpvote.id).where(
+                    RouteUpvote.route_id == route.id, RouteUpvote.user_id == user.id
+                )
+            )
+            is not None
+        )
+    return to_detail(
+        route, my_rating=existing.value if existing else None, my_upvote=my_upvote
+    )
 
 
 def _media_path(relative: str | None) -> Path | None:

@@ -8,15 +8,18 @@
 
 import type {
   Comment,
+  CommunityRouteCreateIn,
   RatingResult,
   Ride,
   RideDefaults,
   RideInput,
   RouteDetail,
   RouteFilterState,
+  RouteImportPreview,
   RoutePage,
   RouteSummary,
   SessionOut,
+  UpvoteResult,
   User,
   UserSummary,
   WaterResult,
@@ -202,6 +205,41 @@ export const api = {
   /** Alle actieve routes ophalen; de API geeft maximaal 100 per pagina. */
   allRoutes: () => fetchAllRoutes(),
 
+  /** Officiële + community routes samen, voor het routekeuzeveld bij een rit. */
+  allRoutesForRideForm: async (): Promise<RouteSummary[]> => {
+    const [official, community] = await Promise.all([
+      fetchAllRoutes(),
+      request<RouteSummary[]>("/api/community/routes" + query({ sort: "name" })),
+    ]);
+    return [...official, ...community];
+  },
+
+  // ------------------------------------------------------- community routes
+  communityRoutes: (search?: string, sort: string = "upvotes") =>
+    request<RouteSummary[]>("/api/community/routes" + query({ search, sort })),
+  importCommunityRouteGpx: (file: File) => {
+    const form = new FormData();
+    form.append("gpx", file);
+    return request<RouteImportPreview>("/api/community/routes/import", {
+      method: "POST",
+      body: form,
+    });
+  },
+  importCommunityRouteUrl: (url: string) => {
+    const form = new FormData();
+    form.append("url", url);
+    return request<RouteImportPreview>("/api/community/routes/import", {
+      method: "POST",
+      body: form,
+    });
+  },
+  createCommunityRoute: (payload: CommunityRouteCreateIn) =>
+    request<RouteDetail>("/api/community/routes", { method: "POST", ...json(payload) }),
+  upvoteRoute: (routeId: number) =>
+    request<UpvoteResult>(`/api/community/routes/${routeId}/upvote`, { method: "POST" }),
+  removeUpvote: (routeId: number) =>
+    request<UpvoteResult>(`/api/community/routes/${routeId}/upvote`, { method: "DELETE" }),
+
   // ---------------------------------------------------------------- ritten
   members: () => request<UserSummary[]>("/api/users"),
   rides: (includePast = false, mine = false) =>
@@ -255,6 +293,8 @@ export const api = {
     }),
   adminUpdateRoute: (id: number, payload: Record<string, unknown>) =>
     request<RouteSummary>(`/api/admin/routes/${id}`, { method: "PATCH", ...json(payload) }),
+  adminPromoteRoute: (id: number) =>
+    request<RouteSummary>(`/api/admin/routes/${id}/promote`, { method: "POST" }),
   adminUsers: (search?: string) => request<User[]>("/api/admin/users" + query({ search })),
   adminUpdateUser: (id: number, payload: Record<string, unknown>) =>
     request<User>(`/api/admin/users/${id}`, { method: "PATCH", ...json(payload) }),

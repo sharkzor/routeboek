@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.routers import admin, auth, rides, routes, social, users, water
+from app.routers import admin, auth, community, rides, routes, social, users, water
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router)
     app.include_router(routes.router)
     app.include_router(social.router)
+    app.include_router(community.router)
     app.include_router(rides.router)
     app.include_router(water.router)
     app.include_router(admin.router)

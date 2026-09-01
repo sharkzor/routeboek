@@ -126,6 +126,19 @@ function RoutesTab() {
     }
   };
 
+  const promote = async (route: RouteSummary) => {
+    try {
+      await api.adminPromoteRoute(route.id);
+      notifications.show({ message: `'${route.name}' is gepromoveerd naar het routeboek.`, color: "green" });
+      void load(search);
+    } catch (err) {
+      notifications.show({
+        message: err instanceof ApiError ? err.message : "Promoveren is mislukt.",
+        color: "red",
+      });
+    }
+  };
+
   return (
     <Stack gap="md">
       <Group justify="space-between" wrap="wrap">
@@ -161,6 +174,7 @@ function RoutesTab() {
                   <Table.Th>Afstand</Table.Th>
                   <Table.Th>Soort</Table.Th>
                   <Table.Th>Wind</Table.Th>
+                  <Table.Th>Herkomst</Table.Th>
                   <Table.Th>Status</Table.Th>
                   <Table.Th />
                 </Table.Tr>
@@ -183,6 +197,17 @@ function RoutesTab() {
                       )}
                     </Table.Td>
                     <Table.Td>
+                      {route.origin === "community" ? (
+                        <Badge color="grape" variant="light" title={route.submitted_by ?? undefined}>
+                          Community {route.upvote_count > 0 ? `· ${route.upvote_count} stemmen` : ""}
+                        </Badge>
+                      ) : (
+                        <Badge color="routeboek" variant="light">
+                          Officieel
+                        </Badge>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
                       {route.is_active ? (
                         <Badge color="green" variant="light">
                           Zichtbaar
@@ -195,6 +220,16 @@ function RoutesTab() {
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end" wrap="nowrap">
+                        {route.origin === "community" && (
+                          <Button
+                            size="compact-xs"
+                            variant="light"
+                            color="grape"
+                            onClick={() => void promote(route)}
+                          >
+                            Promoveren
+                          </Button>
+                        )}
                         {!route.is_active && (
                           <Button
                             size="compact-xs"

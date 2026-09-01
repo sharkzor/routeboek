@@ -80,6 +80,8 @@ routeboek/
 │       ├── mail.py                   SMTP-verzending (Ziggo)
 │       ├── deps.py                   FastAPI-dependencies (auth-guards)
 │       ├── seed.py                   import van data/seed/routes.json
+│       ├── routes_common.py          gedeeld: slugify, unique_slug, track_stats
+│       ├── route_import.py           GPX/URL-import + SSRF-bescherming (community routes)
 │       ├── main.py                   app-factory, static hosting, SPA-fallback
 │       ├── routers/
 │       │   ├── auth.py               registratie, login, verificatie, reset
@@ -87,7 +89,9 @@ routeboek/
 │       │   ├── routes.py             routeoverzicht + filters + downloads
 │       │   ├── rides.py              ritten organiseren en deelnemen
 │       │   ├── water.py              waterpunten toevoegen aan een GPX
-│       │   └── admin.py              beheer van routes en gebruikers
+│       │   ├── social.py             reacties en waarderingen
+│       │   ├── community.py          community-routes: import, aanmaken, upvoten
+│       │   └── admin.py              beheer van routes (incl. promoveren) en gebruikers
 │       ├── services/
 │       │   └── rides.py              ritten-logica los van FastAPI
 │       └── water/                    overgenomen uit /home/shark/gpx
@@ -106,8 +110,9 @@ routeboek/
 │       │                             RouteFilters, RouteMap, Stars, WaterDialog
 │       ├── pages/                    Login, Register, ForgotPassword,
 │       │                             ResetPassword, Verify, Routes,
-│       │                             RouteDetail, Rides, RideForm, Admin,
-│       │                             Account
+│       │                             RouteDetail, Rides, RideForm,
+│       │                             CommunityRoutes, NewCommunityRoute,
+│       │                             Admin, Account
 │       ├── theme.ts                  Routeboek-huisstijl
 │       ├── styles.css                huisstijlklassen (.rb-*)
 │       └── main.tsx                  providers + router
@@ -173,8 +178,11 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
 - `user_sessions` — serverside sessies; de cookie bevat alleen een random token
 - `email_tokens` — eenmalige tokens (`verify_email`, `reset_password`)
 - `routes` — de 166 geïmporteerde routes plus door admins toegevoegde routes
+  én door leden aangeleverde community-routes (zie `origin` hieronder)
 - `route_ratings` — waardering (1-5) per lid per route, uniek per paar
 - `route_comments` — reacties van leden onder een route
+- `route_upvotes` — stemmen van leden op community-routes, uniek per
+  route/gebruiker (`Route.upvote_count` is de teller)
 - `rides` — georganiseerde ritten
 - `ride_participants` — aanmeldingen (uniek per rit/gebruiker)
 
@@ -335,6 +343,62 @@ gedeelde helper `app/rating.py:recompute_rating()`, aangeroepen door zowel
 stem/verwijdering). Zo blijft historische informatie behouden zonder dat
 scrapete "stemmen" een eigen gebruikersaccount nodig hebben.
 
+### Community routes
+Elk lid mag zelf een route aanleveren. Dit is bewust **geen aparte tabel**:
+een community-route is gewoon een rij in `routes` met `Route.origin =
+"community"` (i.p.v. `"official"`). Zo hergebruikt de feature alle
+bestaande route-infrastructuur (detailpagina, kaart, GPX/TCX-download,
+waterpunten, reacties, waarderingen, ritten aanmaken via `Ride.route_id`)
+zonder extra code. "Promoveren" naar het officiële routeboek is dan ook
+niets meer dan `origin` terugzetten op `"official"`
+(`POST /api/admin/routes/{id}/promote`, alleen voor admins).
+
+- **Twee-staps wizard** (`app/routers/community.py`,
+  `frontend/src/pages/NewCommunityRoutePage.tsx`): stap 1 importeert een
+  route (GPX-upload of een URL die rechtstreeks GPX-content teruggeeft) en
+  toont een preview (naam, afstand, hoogtemeters, geschatte windrichting)
+  zónder iets op te slaan; stap 2 laat de aanbieder de metadata aanvullen
+  (naam, beschrijving, soort, windrichting, categorieën, Strava-link) en
+  slaat pas dan de route op (`POST /api/community/routes`).
+- **Geen Strava/Komoot-scraping.** Komoot blokkeert zowel de onofficiële API
+  als tourpagina's met 403, ook voor bekende publieke tour-ID's. Strava's
+  routepagina's zijn een client-side gerenderde shell zonder embedded data;
+  de echte data komt via een geauthenticeerde XHR-call binnen, dus
+  server-side ophalen zonder ingelogde sessie werkt niet. In plaats van iets
+  fragiels te bouwen krijgt de gebruiker bij een kale Strava/Komoot-link een
+  duidelijke Nederlandse foutmelding die aanraadt de GPX te exporteren en te
+  uploaden. Een link die wél rechtstreeks GPX teruggeeft (bv. een
+  Komoot-deelsleutel-exportlink) werkt gewoon via de generieke
+  URL-importer.
+- **SSRF-bescherming is verplicht** voor `import_from_url()` in
+  `app/route_import.py`, want dit endpoint laat de server een door de
+  gebruiker opgegeven URL ophalen: scheme-allowlist (alleen http/https),
+  DNS-resolutie + weigering van private/loopback/link-local/multicast/
+  reserved/unspecified IP's via de `ipaddress`-module, **handmatig**
+  redirects volgen (max. 5 hops, elke hop opnieuw gevalideerd — vertrouw
+  nooit op de automatische redirect-afhandeling van `requests` bij
+  user-supplied URL's), een gestreamde download met een harde limiet van
+  20 MB (`MAX_IMPORT_BYTES`) en een timeout van 10s. Voeg nooit een nieuw
+  server-side "haal deze URL op"-endpoint toe zonder dezelfde bescherming.
+- **`Route.upvote_count`** is een gedenormaliseerde teller die bij elke
+  stem/intrekking in `RouteUpvote` wordt bij- of afgeteld (niet elke keer
+  herberekend); `GET /api/community/routes` levert ook `my_upvote` per
+  ingelogde gebruiker mee via één gebatchte query.
+- **`/api/routes` (het officiële overzicht) sluit community-routes altijd
+  uit** (`_apply_filters()` filtert op `origin == official`); de losse
+  detailpagina/`GET /api/routes/{id}` is bewust origin-agnostisch en werkt
+  ongewijzigd voor beide soorten routes. `submitted_by` (de weergavenaam van
+  de aanbieder) wordt alleen lazy geladen wanneer `origin == community`, om
+  geen N+1-query te introduceren op de veelgebruikte officiële lijst.
+- Voor community-routes wordt **geen fysiek GPX/TCX-bestand** weggeschreven;
+  `coordinates` (`[[lat, lon], ...]`, dezelfde conventie als elders) is de
+  bron van waarheid en de bestaande GPX-downloadendpoint gebruikt hiervoor
+  automatisch zijn coördinaten-fallback (`build_gpx_from_coordinates`).
+- Ritten aanmaken via `RideFormPage` gebruikt `api.allRoutesForRideForm()`,
+  dat officiële en community-routes samenvoegt (community-opties krijgen het
+  label-suffix " · Community") zodat iedereen ook een rit kan organiseren
+  vanuit een community-route.
+
 ---
 
 ## 9. Frontend-conventies
@@ -417,4 +481,3 @@ Houd hier rekening mee bij het ontwerp:
   zodat een bot dezelfde code kan gebruiken.
 - Ritten aanmaken wordt verder uitgewerkt (herhalende ritten, aanmeldingen,
   wegkapitein-rollen).
-- Beoordelingen en reacties op routes (bewust nog niet gemigreerd).

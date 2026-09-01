@@ -24,6 +24,8 @@ import RoutesPage from "./pages/RoutesPage";
 import RouteDetailPage from "./pages/RouteDetailPage";
 import RidesPage from "./pages/RidesPage";
 import RideFormPage from "./pages/RideFormPage";
+import CommunityRoutesPage from "./pages/CommunityRoutesPage";
+import NewCommunityRoutePage from "./pages/NewCommunityRoutePage";
 import AdminPage from "./pages/AdminPage";
 import AccountPage from "./pages/AccountPage";
 import { theme } from "./theme";
@@ -57,6 +59,8 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/ritten" element={<RidesPage />} />
                 <Route path="/ritten/nieuw" element={<RideFormPage />} />
                 <Route path="/ritten/:rideId/bewerken" element={<RideFormPage />} />
+                <Route path="/community" element={<CommunityRoutesPage />} />
+                <Route path="/community/nieuw" element={<NewCommunityRoutePage />} />
                 <Route path="/account" element={<AccountPage />} />
                 <Route
                   path="/beheer"

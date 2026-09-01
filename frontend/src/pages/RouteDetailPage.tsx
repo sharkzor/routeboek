@@ -16,6 +16,7 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import {
   IconArrowLeft,
   IconArrowUpRight,
@@ -24,6 +25,8 @@ import {
   IconCalendarPlus,
   IconDownload,
   IconDroplet,
+  IconThumbUp,
+  IconTrophy,
 } from "@tabler/icons-react";
 import { Link, useNavigate, useParams } from "react-router";
 
@@ -31,6 +34,7 @@ import Stars from "../components/Stars";
 import StarInput from "../components/StarInput";
 import CommentsSection from "../components/CommentsSection";
 import WaterDialog from "../components/WaterDialog";
+import { useAuth } from "../auth/AuthContext";
 
 // Leaflet is fors; alleen deze pagina heeft het nodig.
 const RouteMap = lazy(() => import("../components/RouteMap"));
@@ -46,10 +50,13 @@ import {
 export default function RouteDetailPage() {
   const { routeId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [route, setRoute] = useState<RouteDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [water, setWater] = useState<WaterResult | null>(null);
   const [waterOpened, waterDialog] = useDisclosure(false);
+  const [voting, setVoting] = useState(false);
+  const [promoting, setPromoting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +113,45 @@ export default function RouteDetailPage() {
     }
   };
 
+  const toggleUpvote = async () => {
+    if (!route || voting) return;
+    setVoting(true);
+    try {
+      const result = route.my_upvote
+        ? await api.removeUpvote(route.id)
+        : await api.upvoteRoute(route.id);
+      setRoute((current) =>
+        current
+          ? { ...current, upvote_count: result.upvote_count, my_upvote: result.my_upvote }
+          : current,
+      );
+    } catch (err) {
+      notifications.show({
+        message: err instanceof ApiError ? err.message : "Stemmen is mislukt.",
+        color: "red",
+      });
+    } finally {
+      setVoting(false);
+    }
+  };
+
+  const promote = async () => {
+    if (!route) return;
+    setPromoting(true);
+    try {
+      const updated = await api.adminPromoteRoute(route.id);
+      setRoute((current) => (current ? { ...current, origin: updated.origin } : current));
+      notifications.show({ message: "Route staat nu in het officiële routeboek.", color: "green" });
+    } catch (err) {
+      notifications.show({
+        message: err instanceof ApiError ? err.message : "Promoveren is mislukt.",
+        color: "red",
+      });
+    } finally {
+      setPromoting(false);
+    }
+  };
+
   return (
     <Stack gap="lg">
       <Anchor component={Link} to="/routes" c="dimmed" size="sm">
@@ -116,7 +162,19 @@ export default function RouteDetailPage() {
 
       <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">
         <Box>
-          <Title order={2}>{route.name}</Title>
+          <Group gap={8} align="center">
+            <Title order={2}>{route.name}</Title>
+            {route.origin === "community" && (
+              <Badge color="grape" variant="light">
+                Community
+              </Badge>
+            )}
+          </Group>
+          {route.origin === "community" && route.submitted_by && (
+            <Text size="xs" c="dimmed" mt={2}>
+              Aangeleverd door {route.submitted_by}
+            </Text>
+          )}
           <Group gap="xs" mt={6} align="center">
             <Stars value={route.rating} count={route.rating_count} size={18} />
             <Text size="xs" c="dimmed">·</Text>
@@ -126,13 +184,37 @@ export default function RouteDetailPage() {
             </Group>
           </Group>
         </Box>
-        <Button
-          leftSection={<IconCalendarPlus size={18} />}
-          color="routeboek"
-          onClick={() => navigate(`/ritten/nieuw?route=${route.id}`)}
-        >
-          Organiseer een rit
-        </Button>
+        <Group gap="sm" wrap="wrap">
+          {route.origin === "community" && (
+            <Button
+              variant={route.my_upvote ? "filled" : "light"}
+              color="routeboek"
+              loading={voting}
+              leftSection={<IconThumbUp size={18} />}
+              onClick={() => void toggleUpvote()}
+            >
+              {route.upvote_count}
+            </Button>
+          )}
+          {route.origin === "community" && user?.is_admin && (
+            <Button
+              variant="light"
+              color="grape"
+              loading={promoting}
+              leftSection={<IconTrophy size={18} />}
+              onClick={() => void promote()}
+            >
+              Promoveren naar routeboek
+            </Button>
+          )}
+          <Button
+            leftSection={<IconCalendarPlus size={18} />}
+            color="routeboek"
+            onClick={() => navigate(`/ritten/nieuw?route=${route.id}`)}
+          >
+            Organiseer een rit
+          </Button>
+        </Group>
       </Group>
 
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
