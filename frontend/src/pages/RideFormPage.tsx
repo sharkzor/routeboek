@@ -45,7 +45,8 @@ const RIDE_TYPE_OPTIONS = (Object.keys(RIDE_TYPE_LABELS) as RideType[]).map((val
 interface FormValues {
   name: string;
   owner_id: string;
-  ride_date: Date | null;
+  // Mantine 9's DateInput werkt met "YYYY-MM-DD"-strings, niet met Date.
+  ride_date: string | null;
   ride_time: string;
   route_id: string;
   ride_type: RideType;
@@ -56,11 +57,13 @@ interface FormValues {
   is_private: boolean;
 }
 
-/** Datum als YYYY-MM-DD in lokale tijd; toISOString() zou een dag kunnen schuiven. */
-function toIsoDate(value: Date): string {
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${value.getFullYear()}-${month}-${day}`;
+/** Vandaag als "YYYY-MM-DD" in lokale tijd; toISOString() zou een dag kunnen
+ *  schuiven door de UTC-conversie. */
+function todayIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 export default function RideFormPage() {
@@ -117,7 +120,7 @@ export default function RideFormPage() {
           form.setValues({
             name: ride.name,
             owner_id: String(ride.owner.id),
-            ride_date: new Date(`${ride.ride_date}T00:00:00`),
+            ride_date: ride.ride_date,
             ride_time: ride.ride_time.slice(0, 5),
             route_id: ride.route ? String(ride.route.id) : "",
             ride_type: ride.ride_type,
@@ -133,7 +136,7 @@ export default function RideFormPage() {
           setDefaultsLabel(defaults.label);
           form.setValues({
             owner_id: user ? String(user.id) : "",
-            ride_date: new Date(`${defaults.ride_date}T00:00:00`),
+            ride_date: defaults.ride_date,
             ride_time: defaults.ride_time.slice(0, 5),
           });
           // Naam en afstand volgen standaard de gekozen route.
@@ -188,20 +191,20 @@ export default function RideFormPage() {
   const submit = form.onSubmit(async (values) => {
     setBusy(true);
     setError(null);
-    const payload: RideInput = {
-      name: values.name.trim(),
-      owner_id: values.owner_id ? Number(values.owner_id) : null,
-      ride_date: toIsoDate(values.ride_date as Date),
-      ride_time: `${values.ride_time}:00`.slice(0, 8),
-      route_id: values.route_id ? Number(values.route_id) : null,
-      ride_type: values.ride_type,
-      distance_km: values.distance_km === "" ? null : Number(values.distance_km),
-      speed_kmh: values.speed_kmh === "" ? null : Number(values.speed_kmh),
-      max_participants: Number(values.max_participants),
-      notes_html: values.notes_html,
-      is_private: values.is_private,
-    };
     try {
+      const payload: RideInput = {
+        name: values.name.trim(),
+        owner_id: values.owner_id ? Number(values.owner_id) : null,
+        ride_date: values.ride_date as string,
+        ride_time: `${values.ride_time}:00`.slice(0, 8),
+        route_id: values.route_id ? Number(values.route_id) : null,
+        ride_type: values.ride_type,
+        distance_km: values.distance_km === "" ? null : Number(values.distance_km),
+        speed_kmh: values.speed_kmh === "" ? null : Number(values.speed_kmh),
+        max_participants: Number(values.max_participants),
+        notes_html: values.notes_html,
+        is_private: values.is_private,
+      };
       if (editing) {
         await api.updateRide(Number(rideId), payload);
         notifications.show({ message: "De rit is bijgewerkt.", color: "green" });
@@ -296,7 +299,7 @@ export default function RideFormPage() {
               <DateInput
                 label="Datum"
                 valueFormat="dddd D MMMM YYYY"
-                minDate={new Date()}
+                minDate={todayIso()}
                 required
                 {...form.getInputProps("ride_date")}
               />

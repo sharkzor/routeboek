@@ -37,7 +37,8 @@ const EVENT_TYPE_OPTIONS = (Object.keys(EVENT_TYPE_LABELS) as EventType[]).map((
 interface FormValues {
   name: string;
   event_type: EventType;
-  event_date: Date | null;
+  // Mantine 9's DateInput werkt met "YYYY-MM-DD"-strings, niet met Date.
+  event_date: string | null;
   event_time: string;
   route_id: string;
   url: string;
@@ -48,11 +49,13 @@ interface FormValues {
   notes_html: string;
 }
 
-/** Datum als YYYY-MM-DD in lokale tijd; toISOString() zou een dag kunnen schuiven. */
-function toIsoDate(value: Date): string {
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${value.getFullYear()}-${month}-${day}`;
+/** Vandaag als "YYYY-MM-DD" in lokale tijd; toISOString() zou een dag kunnen
+ *  schuiven door de UTC-conversie. */
+function todayIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 export default function EventFormPage() {
@@ -100,7 +103,7 @@ export default function EventFormPage() {
           form.setValues({
             name: event.name,
             event_type: event.event_type,
-            event_date: new Date(`${event.event_date}T00:00:00`),
+            event_date: event.event_date,
             event_time: event.event_time ? event.event_time.slice(0, 5) : "",
             route_id: event.route ? String(event.route.id) : "",
             url: event.url ?? "",
@@ -148,20 +151,20 @@ export default function EventFormPage() {
   const submit = form.onSubmit(async (values) => {
     setBusy(true);
     setError(null);
-    const payload: EventInput = {
-      name: values.name.trim(),
-      event_type: values.event_type,
-      route_id: values.route_id ? Number(values.route_id) : null,
-      event_date: toIsoDate(values.event_date as Date),
-      event_time: values.event_time ? `${values.event_time}:00`.slice(0, 8) : null,
-      url: values.url.trim() || null,
-      cost_eur: values.cost_eur === "" ? null : Number(values.cost_eur),
-      distance_km: values.distance_km === "" ? null : Number(values.distance_km),
-      speed_kmh: values.speed_kmh === "" ? null : Number(values.speed_kmh),
-      max_participants: Number(values.max_participants),
-      notes_html: values.notes_html,
-    };
     try {
+      const payload: EventInput = {
+        name: values.name.trim(),
+        event_type: values.event_type,
+        route_id: values.route_id ? Number(values.route_id) : null,
+        event_date: values.event_date as string,
+        event_time: values.event_time ? `${values.event_time}:00`.slice(0, 8) : null,
+        url: values.url.trim() || null,
+        cost_eur: values.cost_eur === "" ? null : Number(values.cost_eur),
+        distance_km: values.distance_km === "" ? null : Number(values.distance_km),
+        speed_kmh: values.speed_kmh === "" ? null : Number(values.speed_kmh),
+        max_participants: Number(values.max_participants),
+        notes_html: values.notes_html,
+      };
       if (editing) {
         await api.updateEvent(Number(eventId), payload);
         notifications.show({ message: "Het event is bijgewerkt.", color: "green" });
@@ -221,7 +224,7 @@ export default function EventFormPage() {
               <DateInput
                 label="Datum"
                 valueFormat="dddd D MMMM YYYY"
-                minDate={new Date()}
+                minDate={todayIso()}
                 required
                 {...form.getInputProps("event_date")}
               />

@@ -595,6 +595,20 @@ paar kernverschillen:
   maar één bestand nodig. De oude `routeboek-logo*.png` zijn verwijderd.
 - Mantine-theming staat centraal in `src/theme.ts`; geen losse hardgecodeerde
   kleuren in componenten.
+- **`DateInput` (Mantine 9) werkt met `"YYYY-MM-DD"`-strings, niet met
+  `Date`-objecten.** `onChange` levert een `DateStringValue | null`. Typeer
+  het formulierveld dus als `string | null` en stuur de waarde ongewijzigd
+  door naar de API (die verwacht exact dat formaat). Zet er géén
+  `new Date(...)`/`toIsoDate()`-conversie omheen: dat compileert wel (het
+  veld is `Date` getypeerd, dus TypeScript klaagt niet over de cast) maar
+  crasht bij het opslaan met `value.getMonth is not a function`.
+  `minDate`/`maxDate` accepteren wél beide vormen.
+- **Bouw de request-payload altijd binnen de `try` van een submit-handler.**
+  Staat de payload-constructie ervoor, dan komt een exception daarin nooit
+  bij `catch`/`finally` terecht: de gebruiker ziet een eeuwig draaiende
+  knop zonder foutmelding, en er verschijnt niets in de serverlogs omdat er
+  nooit een request is verstuurd. Precies dit patroon verborg de
+  `DateInput`-bug hierboven.
 - Leaflet en de kaartweergave worden lui geladen (`lazy(() => import(...))` in
   `RouteDetailPage`), zodat de hoofdbundel klein blijft.
 - Routes in de router zijn Nederlandstalig (`/inloggen`, `/registreren`,
