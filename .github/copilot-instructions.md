@@ -82,6 +82,7 @@ routeboek/
 │       ├── seed.py                   import van data/seed/routes.json
 │       ├── routes_common.py          gedeeld: slugify, unique_slug, track_stats
 │       ├── route_import.py           GPX-import (community routes; bewust geen URL-import)
+│       ├── route_thumbnail.py        kaartminiatuur (OSM-tegels) voor routes zonder map_file
 │       ├── main.py                   app-factory, static hosting, SPA-fallback
 │       ├── routers/
 │       │   ├── auth.py               registratie, login, verificatie, reset
@@ -121,7 +122,7 @@ routeboek/
 └── data/                             volume, niet in git
     ├── seed/routes.json              gescrapete metadata (166 routes, 9,4 MB)
     ├── media/{gpx,tcx,maps}/         routebestanden en kaartafbeeldingen
-    ├── cache/                        drinkwaterpunten-cache
+    ├── cache/                        drinkwaterpunten-cache, osm_tiles/, route_maps/
     ├── tmp/                          gegenereerde GPX met waterpunten
     └── secret.key                    automatisch gegenereerd als SECRET_KEY leeg is
 ```
@@ -293,6 +294,41 @@ snelheid km/u, max. deelnemers (4 t/m 12), opmerkingen, privé-rit.
 eerstvolgende van die twee momenten is de voorgevulde datum en tijd.
 
 Een privé-rit verschijnt niet in het standaardoverzicht.
+
+### Kaartminiaturen zonder eigen kaartbestand
+Alleen de 166 gescrapete officiële routes hebben een eigen `Route.map_file`
+(een gekopieerde afbeelding van routeboek.cc). Community-routes en door
+admins via GPX toegevoegde routes hebben dat niet, maar moeten wél een
+kaartje tonen in het overzicht, bij ritten en op kaarten
+(`RouteCard`/`RidesPage`/community-lijst gebruiken overal dezelfde
+`route.map_url`).
+
+`app/route_thumbnail.py:render_route_thumbnail_png()` levert die miniatuur
+zonder eigen kaartbestand: een echte OSM-achtergrond (geen kale kleur/SVG —
+dat oogde eerder verwarrend naast de echte kaartjes), met de route als rode
+lijn erover. `media_url()`/`GET /api/routes/{id}/map` in
+`routers/routes.py` valt hierop terug zodra `route.map_file` leeg is maar
+`route.coordinates` wél gevuld is.
+
+- Kiest zelf een zoomniveau dat de route (plus rand) in het miniatuurformaat
+  laat passen (`_pick_zoom`, standaard "fit bounds"-berekening met Web
+  Mercator-pixelcoördinaten), download de benodigde 256×256-tegels van
+  `tile.openstreetmap.org` en plakt ze samen met Pillow.
+- **Tegel-caching is verplicht, niet optioneel**: de OSM-tile-usage-policy
+  staat geen herhaald automatisch ophalen van dezelfde tegel toe. Tegels
+  blijven 30 dagen op schijf staan onder `data/cache/osm_tiles/{z}/{x}/{y}.png`
+  en worden — omdat alle clubroutes toch al dicht bij elkaar liggen — vaak
+  hergebruikt tussen routes. Het uiteindelijke plaatje zelf wordt ook
+  gecachet, onder `data/cache/route_maps/`, gesleuteld op een hash van de
+  coördinaten.
+- Dit endpoint blijft, net als de rest van de media-endpoints, achter
+  `current_user` (zie beveiligingsregel 11): geen `StaticFiles`, geen
+  publieke tegel-proxy.
+- Verwar dit niet met de grote Leaflet-kaart op de detailpagina
+  (`RouteMap.tsx`): die tekent client-side met live tegels en heeft zijn
+  eigen CSP-regels (zie beveiligingsregel 12); deze miniatuur is een losse,
+  server-side gerenderde PNG en heeft dat probleem niet, want hij wordt
+  vanaf `'self'` geserveerd.
 
 ### Waterpunten
 Bij het downloaden van een route kan de gebruiker drinkwaterpunten laten

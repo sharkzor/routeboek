@@ -17,6 +17,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import current_user
 from app.models import Route, RouteOrigin, RouteRating, RouteType, RouteUpvote, User
+from app.route_thumbnail import render_route_thumbnail_png
 from app.schemas import RouteDetail, RoutePage, RouteSummary
 from app.water.processing import build_gpx_from_coordinates
 
@@ -34,7 +35,7 @@ SORT_OPTIONS = {
 
 
 def media_url(route: Route, kind: str) -> str | None:
-    if kind == "map" and route.map_file:
+    if kind == "map" and (route.map_file or route.coordinates):
         return f"/api/routes/{route.id}/map"
     return None
 
@@ -215,11 +216,20 @@ def route_map(
 ):
     route = get_route_or_404(db, route_id)
     path = _media_path(route.map_file)
-    if path is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Geen kaartafbeelding."
+    if path is not None:
+        return FileResponse(
+            path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"}
         )
-    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+    if route.coordinates:
+        png = render_route_thumbnail_png(route.coordinates)
+        return Response(
+            content=png,
+            media_type="image/png",
+            headers={"Cache-Control": "private, max-age=86400"},
+        )
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail="Geen kaartafbeelding."
+    )
 
 
 def _download_name(route: Route, extension: str) -> str:
