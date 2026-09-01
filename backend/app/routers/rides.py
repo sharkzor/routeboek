@@ -19,9 +19,11 @@ from app.schemas import (
     RideOut,
     RideRouteRef,
     RideUpdateIn,
+    RideWeatherOut,
     UserSummary,
 )
 from app.services import rides as ride_service
+from app.services import weather as weather_service
 
 router = APIRouter(prefix="/api/rides", tags=["rides"])
 
@@ -133,6 +135,27 @@ def ride_detail(
             status_code=status.HTTP_404_NOT_FOUND, detail="Deze rit bestaat niet."
         )
     return _to_out(ride, user)
+
+
+@router.get("/{ride_id}/weather", response_model=RideWeatherOut)
+def ride_weather(
+    ride_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)
+) -> RideWeatherOut:
+    ride = _load_ride(db, ride_id)
+    if not ride_service.can_view(ride, user):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Deze rit bestaat niet."
+        )
+    if ride.route is None or not ride.route.coordinates:
+        return RideWeatherOut(available=False)
+    lat, lon = ride.route.coordinates[0][0], ride.route.coordinates[0][1]
+    hourly = weather_service.get_hourly_forecast(lat, lon, ride.ride_date)
+    if hourly is None:
+        return RideWeatherOut(available=False)
+    hours = weather_service.hours_around(hourly, ride.ride_time)
+    if not hours:
+        return RideWeatherOut(available=False)
+    return RideWeatherOut(available=True, hours=hours)
 
 
 @router.post("", response_model=RideOut, status_code=status.HTTP_201_CREATED)

@@ -363,6 +363,22 @@ class RideOut(BaseModel):
     can_edit: bool = False
 
 
+class WeatherHourOut(BaseModel):
+    time: str
+    temp_c: float
+    precipitation_mm: float
+    precipitation_probability: int | None
+    weather_code: int
+    wind_speed_kmh: float
+    wind_direction_deg: float
+    is_day: bool
+
+
+class RideWeatherOut(BaseModel):
+    available: bool
+    hours: list[WeatherHourOut] = Field(default_factory=list)
+
+
 class RideDefaults(BaseModel):
     """Voorgestelde datum en tijd: het eerstvolgende clubmoment."""
 

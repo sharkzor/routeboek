@@ -142,6 +142,22 @@ export interface RideDefaults {
   label: string;
 }
 
+export interface WeatherHour {
+  time: string;
+  temp_c: number;
+  precipitation_mm: number;
+  precipitation_probability: number | null;
+  weather_code: number;
+  wind_speed_kmh: number;
+  wind_direction_deg: number;
+  is_day: boolean;
+}
+
+export interface RideWeather {
+  available: boolean;
+  hours: WeatherHour[];
+}
+
 export interface RideInput {
   name: string;
   owner_id?: number | null;

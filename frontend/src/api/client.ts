@@ -15,6 +15,7 @@ import type {
   Ride,
   RideDefaults,
   RideInput,
+  RideWeather,
   RouteDetail,
   RouteFilterState,
   RouteImportPreview,
@@ -251,6 +252,7 @@ export const api = {
     request<{ detail: string }>(`/api/rides/${id}`, { method: "DELETE" }),
   joinRide: (id: number) => request<Ride>(`/api/rides/${id}/join`, { method: "POST" }),
   leaveRide: (id: number) => request<Ride>(`/api/rides/${id}/leave`, { method: "POST" }),
+  rideWeather: (id: number) => request<RideWeather>(`/api/rides/${id}/weather`),
 
   // ----------------------------------------------------------------- events
   events: (includePast = false, mine = false) =>

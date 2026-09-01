@@ -26,6 +26,7 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconClock,
+  IconCloudRain,
   IconDots,
   IconLock,
   IconMapPin,
@@ -39,7 +40,8 @@ import { Link, useNavigate } from "react-router";
 
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { RIDE_TYPE_LABELS, type Ride } from "../api/types";
+import { RIDE_TYPE_LABELS, type Ride, type WeatherHour } from "../api/types";
+import { WeatherStrip } from "../components/WeatherStrip";
 
 dayjs.locale("nl");
 
@@ -50,6 +52,8 @@ export function formatRideMoment(ride: Ride): string {
   return `${day.format("dddd D MMMM YYYY")} om ${ride.ride_time.slice(0, 5)} uur`;
 }
 
+const FORECAST_HORIZON_DAYS = 15;
+
 export default function RidesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -57,6 +61,12 @@ export default function RidesPage() {
   const [rides, setRides] = useState<Ride[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [weatherExpanded, setWeatherExpanded] = useState<Set<number>>(
+    new Set(),
+  );
+  const [weatherByRide, setWeatherByRide] = useState<
+    Record<number, { loading: boolean; hours: WeatherHour[] | null }>
+  >({});
 
   const toggleExpanded = (rideId: number) => {
     setExpanded((prev) => {
@@ -64,6 +74,39 @@ export default function RidesPage() {
       if (next.has(rideId)) next.delete(rideId);
       else next.add(rideId);
       return next;
+    });
+  };
+
+  const toggleWeather = (rideId: number) => {
+    setWeatherExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(rideId)) {
+        next.delete(rideId);
+        return next;
+      }
+      next.add(rideId);
+      return next;
+    });
+    setWeatherByRide((prev) => {
+      if (prev[rideId]) return prev;
+      void api
+        .rideWeather(rideId)
+        .then((result) =>
+          setWeatherByRide((current) => ({
+            ...current,
+            [rideId]: {
+              loading: false,
+              hours: result.available ? result.hours : null,
+            },
+          })),
+        )
+        .catch(() =>
+          setWeatherByRide((current) => ({
+            ...current,
+            [rideId]: { loading: false, hours: null },
+          })),
+        );
+      return { ...prev, [rideId]: { loading: true, hours: null } };
     });
   };
 
@@ -175,6 +218,11 @@ export default function RidesPage() {
           {rides.map((ride) => {
             const full = ride.participant_count >= ride.max_participants;
             const past = dayjs(ride.ride_date).isBefore(dayjs().startOf("day"));
+            const weatherEligible =
+              !past &&
+              ride.route !== null &&
+              dayjs(ride.ride_date).diff(dayjs().startOf("day"), "day") <=
+                FORECAST_HORIZON_DAYS;
             return (
               <Card key={ride.id} withBorder radius="md" p="lg">
                 <Group justify="space-between" align="flex-start" wrap="nowrap">
@@ -350,6 +398,41 @@ export default function RidesPage() {
                           </List>
                         )}
                       </Collapse>
+
+                      {weatherEligible && (
+                        <>
+                          <UnstyledButton
+                            onClick={() => toggleWeather(ride.id)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <Group gap={2} c="routeboek.6">
+                              <IconCloudRain size={16} />
+                              <Text size="xs" fw={600}>
+                                {weatherExpanded.has(ride.id)
+                                  ? "Verberg weerbericht"
+                                  : "Weerbericht"}
+                              </Text>
+                              {weatherExpanded.has(ride.id) ? (
+                                <IconChevronUp size={14} />
+                              ) : (
+                                <IconChevronDown size={14} />
+                              )}
+                            </Group>
+                          </UnstyledButton>
+                          <Collapse expanded={weatherExpanded.has(ride.id)}>
+                            <WeatherStrip
+                              loading={
+                                weatherByRide[ride.id]?.loading ?? false
+                              }
+                              hours={weatherByRide[ride.id]?.hours ?? null}
+                            />
+                          </Collapse>
+                        </>
+                      )}
                     </Stack>
                   </Group>
 

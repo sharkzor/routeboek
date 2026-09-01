@@ -295,6 +295,45 @@ eerstvolgende van die twee momenten is de voorgevulde datum en tijd.
 
 Een privé-rit verschijnt niet in het standaardoverzicht.
 
+### Weerbericht bij een rit
+Elke rit met een gekoppelde route toont optioneel een uurlijkse
+weersverwachting (`app/services/weather.py`, endpoint
+`GET /api/rides/{id}/weather`, frontend `components/WeatherStrip.tsx`,
+gebruikt in `RidesPage.tsx`), geïnspireerd op het "Weer"-tabblad van het
+oude routeboek.cc (`weer.png`).
+
+- **Bron: Open-Meteo** (`api.open-meteo.com`), gekozen omdat het gratis is,
+  geen API-key/registratie vereist en een nette hourly-forecast levert.
+  Geen nieuwe dependency nodig — gebruikt `requests`, net als
+  `route_thumbnail.py` en `water/waterpoints_nl.py`.
+- **Locatie** = het eerste coördinatenpunt van `Route.coordinates`
+  (`[[lat, lon], ...]`, zelfde structuur als elders); zonder route of
+  coördinaten is er simpelweg geen weerbericht.
+- **Forecast-horizon is ~15 dagen.** Open-Meteo voorspelt niet verder
+  vooruit, en ritten mogen wel verder vooruit gepland worden. Buiten dat
+  bereik (en voor data in het verleden) geeft de service gewoon `None`
+  terug i.p.v. een foutmelding; de router vertaalt dat naar
+  `{"available": false}`. De frontend berekent zelf ook een grove
+  15-dagen-schatting (`FORECAST_HORIZON_DAYS` in `RidesPage.tsx`) om de
+  "Weerbericht"-knop helemaal niet te tonen als een voorspelling toch
+  nutteloos zou zijn — dat voorkomt een dooie knop die alleen "nog niet
+  beschikbaar" oplevert.
+- **In-memory cache van 30 minuten** per (locatie afgerond op ~1 km,
+  datum), met een `threading.Lock` — zelfde stijl als de bestaande
+  waterpunten-cache, maar zonder schijfbestand omdat het hier om
+  kortlevende voorspeldata gaat, niet om een stabiele bron.
+- **Venster van 4 uur** rond het vertrektijdstip (1 uur ervoor t/m 2 uur
+  erna, `hours_around()`), net als de 4 blokjes in het oude routeboek.cc.
+- **Layout bewust lui/inklapbaar**, niet standaard open: een
+  "Weerbericht"-knop (zelfde patroon als "Wie gaan er mee?") die pas bij
+  klikken de weersverwachting ophaalt en toont als een horizontaal
+  scrollbare `ScrollArea` met vaste-breedte blokjes. Dit voorkomt een
+  layout-sprong bij het laden van het ritten-overzicht en houdt de
+  mobiele weergave (waar horizontaal scrollen prettiger is dan wrappen)
+  overzichtelijk.
+- Geen weerbericht op de Events-pagina (nog) — expliciet buiten scope
+  gehouden omdat daar is gevraagd, alleen ritten.
+
 ### Kaartminiaturen zonder eigen kaartbestand
 Alleen de 166 gescrapete officiële routes hebben een eigen `Route.map_file`
 (een gekopieerde afbeelding van routeboek.cc). Community-routes en door
