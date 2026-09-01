@@ -2,6 +2,8 @@
 
 export type RouteType = "road" | "road_gravel" | "gravel";
 export type RideType = "race" | "race_gravel" | "gravel";
+export type EventType = "sportive" | "race" | "multiday" | "gravel" | "other";
+export type TransportMode = "car" | "train" | "own_transport" | "bike";
 export type WindCode = "N" | "O" | "Z" | "W";
 export type CategoryCode = "beginners" | "high_pace" | "tourist";
 
@@ -154,6 +156,56 @@ export interface RideInput {
   is_private: boolean;
 }
 
+export interface EventRouteRef {
+  id: number;
+  slug: string;
+  name: string;
+  distance_km: number | null;
+  map_url: string | null;
+}
+
+export interface EventParticipant {
+  id: number;
+  display_name: string;
+  transport: TransportMode;
+}
+
+export interface EventItem {
+  id: number;
+  name: string;
+  event_type: EventType;
+  event_date: string;
+  event_time: string | null;
+  url: string | null;
+  cost_eur: number | null;
+  distance_km: number | null;
+  speed_kmh: number | null;
+  max_participants: number;
+  notes_html: string;
+  created_at: string;
+  created_by: UserSummary | null;
+  route: EventRouteRef | null;
+  participants: EventParticipant[];
+  participant_count: number;
+  is_joined: boolean;
+  my_transport: TransportMode | null;
+  can_edit: boolean;
+}
+
+export interface EventInput {
+  name: string;
+  event_type: EventType;
+  route_id?: number | null;
+  event_date: string;
+  event_time?: string | null;
+  url?: string | null;
+  cost_eur?: number | null;
+  distance_km?: number | null;
+  speed_kmh?: number | null;
+  max_participants: number;
+  notes_html: string;
+}
+
 export interface WaterPoint {
   lat: number;
   lon: number;
@@ -205,6 +257,21 @@ export const RIDE_TYPE_LABELS: Record<RideType, string> = {
   race: "Race",
   race_gravel: "Race met Gravel",
   gravel: "Gravel",
+};
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  sportive: "Sportive / toertocht",
+  race: "Wedstrijd",
+  multiday: "Meerdaagse",
+  gravel: "Gravel event",
+  other: "Overig",
+};
+
+export const TRANSPORT_LABELS: Record<TransportMode, string> = {
+  car: "Auto",
+  train: "Trein",
+  own_transport: "Eigen gelegenheid",
+  bike: "Fiets ernaartoe",
 };
 
 export const WIND_LABELS: Record<WindCode, string> = {

@@ -68,6 +68,10 @@ def _load_ride(db: Session, ride_id: int) -> Ride:
             selectinload(Ride.route),
             selectinload(Ride.participants).selectinload(RideParticipant.user),
         )
+        # Zonder dit blijft een al in de identity map geladen Ride (bv. na
+        # join/leave binnen hetzelfde request) zijn oude participants-lijst
+        # tonen; forceer een verse load zodat de response altijd klopt.
+        .execution_options(populate_existing=True)
     )
     if ride is None:
         raise HTTPException(

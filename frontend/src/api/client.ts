@@ -9,6 +9,8 @@
 import type {
   Comment,
   CommunityRouteCreateIn,
+  EventInput,
+  EventItem,
   RatingResult,
   Ride,
   RideDefaults,
@@ -19,6 +21,7 @@ import type {
   RoutePage,
   RouteSummary,
   SessionOut,
+  TransportMode,
   UpvoteResult,
   User,
   UserSummary,
@@ -248,6 +251,21 @@ export const api = {
     request<{ detail: string }>(`/api/rides/${id}`, { method: "DELETE" }),
   joinRide: (id: number) => request<Ride>(`/api/rides/${id}/join`, { method: "POST" }),
   leaveRide: (id: number) => request<Ride>(`/api/rides/${id}/leave`, { method: "POST" }),
+
+  // ----------------------------------------------------------------- events
+  events: (includePast = false, mine = false) =>
+    request<EventItem[]>("/api/events" + query({ include_past: includePast, mine })),
+  event: (id: number) => request<EventItem>(`/api/events/${id}`),
+  createEvent: (payload: EventInput) =>
+    request<EventItem>("/api/events", { method: "POST", ...json(payload) }),
+  updateEvent: (id: number, payload: Partial<EventInput>) =>
+    request<EventItem>(`/api/events/${id}`, { method: "PATCH", ...json(payload) }),
+  deleteEvent: (id: number) =>
+    request<{ detail: string }>(`/api/events/${id}`, { method: "DELETE" }),
+  joinEvent: (id: number, transport: TransportMode) =>
+    request<EventItem>(`/api/events/${id}/join`, { method: "POST", ...json({ transport }) }),
+  leaveEvent: (id: number) =>
+    request<EventItem>(`/api/events/${id}/leave`, { method: "POST" }),
 
   // ----------------------------------------------------------- waterpunten
   waterPoints: (routeId: number, radiusM: number) =>

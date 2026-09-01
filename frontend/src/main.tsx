@@ -24,6 +24,8 @@ import RoutesPage from "./pages/RoutesPage";
 import RouteDetailPage from "./pages/RouteDetailPage";
 import RidesPage from "./pages/RidesPage";
 import RideFormPage from "./pages/RideFormPage";
+import EventsPage from "./pages/EventsPage";
+import EventFormPage from "./pages/EventFormPage";
 import CommunityRoutesPage from "./pages/CommunityRoutesPage";
 import NewCommunityRoutePage from "./pages/NewCommunityRoutePage";
 import AdminPage from "./pages/AdminPage";
@@ -59,6 +61,9 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/ritten" element={<RidesPage />} />
                 <Route path="/ritten/nieuw" element={<RideFormPage />} />
                 <Route path="/ritten/:rideId/bewerken" element={<RideFormPage />} />
+                <Route path="/events" element={<EventsPage />} />
+                <Route path="/events/nieuw" element={<EventFormPage />} />
+                <Route path="/events/:eventId/bewerken" element={<EventFormPage />} />
                 <Route path="/community" element={<CommunityRoutesPage />} />
                 <Route path="/community/nieuw" element={<NewCommunityRoutePage />} />
                 <Route path="/account" element={<AccountPage />} />

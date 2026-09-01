@@ -443,6 +443,63 @@ niets meer dan `origin` terugzetten op `"official"`
   ingelogde gebruiker) te zien of de verwijderknop getoond moet worden —
   géén losse frontend-logica op basis van namen of ID's.
 
+### Events
+Naast ritten (wekelijkse clubtochten) is er een aparte "Events"-feature
+(`app/models.py` → `Event`/`EventParticipant`, `app/services/events.py`,
+`app/routers/events.py`, `frontend/src/pages/EventsPage.tsx` +
+`EventFormPage.tsx`) voor grotere, verder-vooruit-geplande activiteiten
+(sportives, wedstrijden, meerdaagse tochten) waar leden een reismaatje voor
+zoeken. Bewust een **los model** i.p.v. hergebruik van `Ride`, met een
+paar kernverschillen:
+
+- **Geen privacy-optie.** Ritten kunnen prive; events niet — het hele doel
+  is juist breed zichtbaar zijn zodat mensen zich kunnen aansluiten.
+- **Geen aparte "eigenaar"/wegkapitein-rol.** Alleen `created_by_id`;
+  bewerken/verwijderen mag de aanmaker of een admin (`can_edit` in
+  `services/events.py`, zelfde patroon als bij routes/community).
+- **Vervoer is per deelnemer, niet per event.** Bij een rit fietst de hele
+  groep samen; bij een event kan de ene persoon carpoolen en de andere met
+  de trein gaan. Daarom staat `transport` (enum: `car`/`train`/
+  `own_transport`/`bike`) op `EventParticipant`, gekozen bij het aanmelden
+  (`POST /api/events/{id}/join`) en aanpasbaar door opnieuw aan te melden
+  (upsert, geen dubbele rij).
+- **Route-koppeling hergebruikt de bestaande `Route`-tabel** (officieel én
+  community) via `Event.route_id`, precies zoals `Ride.route_id`. Er is
+  bewust **geen eigen GPX-upload op het event-formulier gebouwd** — dat zou
+  de kaart/GPX/waterpunten-infrastructuur dupliceren. Wil iemand een eigen
+  GPX aan een event hangen? Upload 'm eerst als community-route, koppel 'm
+  daarna aan het event via dezelfde route-dropdown die ook bij ritten wordt
+  gebruikt (`api.allRoutesForRideForm()`). Dit is een bewuste
+  scope-inperking, geen bug.
+- **`event_time` is optioneel** (i.t.t. `ride_time`, dat verplicht is) —
+  een meerdaagse tocht heeft niet altijd één vast starttijdstip.
+  `max_participants` heeft een ruimer bereik (2–200, vrij invoerveld) dan
+  bij ritten (4–12, vaste keuzelijst), omdat externe events sterk in
+  omvang variëren.
+- De aanmaker meldt zich bij het aanmaken automatisch aan (net als de
+  wegkapitein bij een rit), met standaard-vervoer `own_transport`.
+- **Belangrijke SQLAlchemy-valkuil** (opgelost in
+  `alembic/versions/20260901_1600_events.py`): gebruik voor een migratie die
+  in dezelfde `upgrade()` zowel een nieuw Postgres-enum-type aanmaakt (via
+  een expliciete `.create(bind, checkfirst=True)`) als een tabel die dat
+  enum als kolomtype gebruikt, **niet** `sa.Enum(..., create_type=False)` —
+  die `create_type`-parameter wordt door de generieke `sa.Enum`-klasse
+  stilzwijgend genegeerd, waardoor `op.create_table()`'s automatische
+  `before_create`-listener het type een tweede keer probeert aan te maken
+  (`DuplicateObject`). Gebruik in plaats daarvan
+  `from sqlalchemy.dialects.postgresql import ENUM as PGEnum` en geef
+  `create_type=False` aan díe klasse — alleen de dialect-specifieke
+  `postgresql.ENUM` respecteert deze parameter daadwerkelijk.
+- **Andere valkuil, ook relevant voor `rides.py`**: `_load_event()`/
+  `_load_ride()` laden een entiteit inclusief `participants` opnieuw ná een
+  join/leave-mutatie, binnen hetzelfde request/dezelfde sessie. Zonder
+  `.execution_options(populate_existing=True)` geeft SQLAlchemy's identity
+  map het **al eerder geladen (verouderde) Python-object** terug in plaats
+  van vers uit de database te lezen, zodat de API-response na een
+  join/leave de oude deelnemerslijst toont. Beide loaders zetten deze
+  execution option nu expliciet aan; houd hier rekening mee bij elke
+  vergelijkbare "muteer, herlaad daarna binnen hetzelfde verzoek"-flow.
+
 ---
 
 ## 9. Frontend-conventies

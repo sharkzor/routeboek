@@ -6,7 +6,7 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.models import RideType, RouteType
+from app.models import EventType, RideType, RouteType, TransportMode
 
 WIND_CODES = {"N", "O", "Z", "W"}
 CATEGORY_CODES = {"beginners", "high_pace", "tourist"}
@@ -369,6 +369,81 @@ class RideDefaults(BaseModel):
     ride_date: date
     ride_time: time
     label: str
+
+
+# -------------------------------------------------------------------- events
+
+
+class EventCreateIn(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    event_type: EventType = EventType.sportive
+    route_id: int | None = None
+    event_date: date
+    event_time: time | None = None
+    url: str | None = Field(default=None, max_length=500)
+    cost_eur: float | None = Field(default=None, ge=0, le=10_000)
+    distance_km: float | None = Field(default=None, ge=0, le=2000)
+    speed_kmh: float | None = Field(default=None, ge=0, le=60)
+    max_participants: int = Field(default=20, ge=2, le=200)
+    notes_html: str = ""
+
+
+class EventUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+    event_type: EventType | None = None
+    route_id: int | None = None
+    event_date: date | None = None
+    event_time: time | None = None
+    url: str | None = Field(default=None, max_length=500)
+    cost_eur: float | None = Field(default=None, ge=0, le=10_000)
+    distance_km: float | None = Field(default=None, ge=0, le=2000)
+    speed_kmh: float | None = Field(default=None, ge=0, le=60)
+    max_participants: int | None = Field(default=None, ge=2, le=200)
+    notes_html: str | None = None
+
+
+class EventJoinIn(BaseModel):
+    transport: TransportMode = TransportMode.own_transport
+
+
+class EventRouteRef(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    name: str
+    distance_km: float | None
+    map_url: str | None = None
+
+
+class EventParticipantOut(BaseModel):
+    id: int
+    display_name: str
+    transport: TransportMode
+
+
+class EventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    event_type: EventType
+    event_date: date
+    event_time: time | None
+    url: str | None
+    cost_eur: float | None
+    distance_km: float | None
+    speed_kmh: float | None
+    max_participants: int
+    notes_html: str
+    created_at: datetime
+    created_by: UserSummary | None
+    route: EventRouteRef | None
+    participants: list[EventParticipantOut] = Field(default_factory=list)
+    participant_count: int = 0
+    is_joined: bool = False
+    my_transport: TransportMode | None = None
+    can_edit: bool = False
 
 
 # ---------------------------------------------------------------- waterpunten

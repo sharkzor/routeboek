@@ -49,6 +49,27 @@ class RideType(str, enum.Enum):
     gravel = "gravel"
 
 
+class EventType(str, enum.Enum):
+    #: Sportieve tocht / toertocht met vaste afstanden.
+    sportive = "sportive"
+    #: Wielerwedstrijd (deelnemen of samen kijken).
+    race = "race"
+    #: Meerdaagse fietsvakantie/reis.
+    multiday = "multiday"
+    #: Gravel event.
+    gravel = "gravel"
+    other = "other"
+
+
+class TransportMode(str, enum.Enum):
+    car = "car"
+    train = "train"
+    #: Eigen gelegenheid: iedereen regelt zelf z'n vervoer.
+    own_transport = "own_transport"
+    #: Ernaartoe fietsen.
+    bike = "bike"
+
+
 class TokenPurpose(str, enum.Enum):
     verify_email = "verify_email"
     reset_password = "reset_password"
@@ -244,6 +265,76 @@ class RideParticipant(Base):
     user: Mapped[User] = relationship()
 
     __table_args__ = (UniqueConstraint("ride_id", "user_id", name="uq_ride_user"),)
+
+
+class Event(Base):
+    """Grotere, verder-vooruit-geplande evenementen (sportives, wedstrijden,
+
+    meerdaagse tochten...) waar leden zich voor kunnen aanmelden om samen
+    heen te gaan. Losstaand van `Ride`: geen wegkapitein, geen woensdag/
+    zondag-standaardslot, en een ruimere deelnemersgroep. Een event kan
+    optioneel verwijzen naar een route uit het routeboek (officieel of
+    community); is die er nog niet, dan levert een lid 'm eerst aan via
+    "Community routes" en kiest 'm daarna hier.
+    """
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    event_type: Mapped[EventType] = mapped_column(
+        Enum(EventType, name="event_type"), default=EventType.sportive, nullable=False
+    )
+    route_id: Mapped[int | None] = mapped_column(
+        ForeignKey("routes.id", ondelete="SET NULL"), index=True
+    )
+    event_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    event_time: Mapped[time | None] = mapped_column(Time)
+    url: Mapped[str | None] = mapped_column(String(500))
+    cost_eur: Mapped[float | None] = mapped_column(Float)
+    distance_km: Mapped[float | None] = mapped_column(Float)
+    speed_kmh: Mapped[float | None] = mapped_column(Float)
+    max_participants: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    notes_html: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+    route: Mapped[Route | None] = relationship()
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
+    participants: Mapped[list["EventParticipant"]] = relationship(
+        back_populates="event", cascade="all, delete-orphan"
+    )
+
+
+class EventParticipant(Base):
+    __tablename__ = "event_participants"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[int] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # Hoe deze deelnemer erheen gaat, o.a. handig om samen te kunnen rijden.
+    transport: Mapped[TransportMode] = mapped_column(
+        Enum(TransportMode, name="transport_mode"),
+        default=TransportMode.own_transport,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    event: Mapped[Event] = relationship(back_populates="participants")
+    user: Mapped[User] = relationship()
+
+    __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_event_user"),)
 
 
 class RouteRating(Base):
