@@ -295,6 +295,32 @@ eerstvolgende van die twee momenten is de voorgevulde datum en tijd.
 
 Een privé-rit verschijnt niet in het standaardoverzicht.
 
+### Layout van het ritten-overzicht
+De ritkaart in `RidesPage.tsx` is bewust **mobile-first** vormgegeven, naar
+het voorbeeld van het oude routeboek (`rit2.png`):
+
+- Eén set JSX voor beide schermformaten; het verschil zit in CSS
+  (`.rb-ride-card` in `styles.css`). Onder 48em is de kaartminiatuur een
+  **volle banner bovenaan**, daarboven 48em schuift 'ie naar een kolom van
+  230px links ernaast. Zo hoeft er geen tweede kaart-variant onderhouden te
+  worden.
+- Linksboven op de miniatuur staat een **scheurkalender-datumblok**
+  (`.rb-ride-date`: maand in clubrood, dag groot, tijd in een donkere chip).
+  Dat combineert datum + tijd in ruimte die anders toch leeg zou zijn.
+- De gegevens staan in `.rb-ride-facts`: op mobiel een **tweekoloms grid**
+  (wegkapitein | deelnemers, afstand | snelheid), op desktop een gewone
+  doorlopende flexrij. Dit was de kern van de mobiele
+  ruimte-winst — vier losse regels werden twee.
+- Redundantie wordt actief onderdrukt: de route-regel verdwijnt als de
+  ritnaam gelijk is aan de routenaam, en `formatRideMoment()` laat het
+  jaartal weg zolang de rit in het huidige jaar valt.
+- Actieknoppen (aan-/afmelden) zijn `fullWidth` op mobiel; de
+  `SegmentedControl` krijgt daar kortere labels ("Komend"/"Mijn"/"Alles").
+- **Let op bij wijzigingen:** controleer dat er geen horizontale overflow
+  ontstaat (`document.documentElement.scrollWidth` moet gelijk zijn aan
+  `clientWidth`). De weerstrip en de deelnemerslijst zijn de twee plekken
+  die dat het snelst breken.
+
 ### Weerbericht bij een rit
 Elke rit met een gekoppelde route toont optioneel een uurlijkse
 weersverwachting (`app/services/weather.py`, endpoint
