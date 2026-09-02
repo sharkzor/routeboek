@@ -14,10 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import current_admin, current_user
-from app.models import RouteComment, RouteRating, User
+from app.models import RouteComment, RouteCompletion, RouteFavorite, RouteRating, User
 from app.rating import recompute_rating
 from app.routers.routes import get_route_or_404
-from app.schemas import CommentCreateIn, CommentOut, RatingIn, RatingOut
+from app.schemas import CommentCreateIn, CommentOut, MarkOut, RatingIn, RatingOut
 
 router = APIRouter(prefix="/api/routes", tags=["social"])
 
@@ -129,3 +129,66 @@ def clear_rating(
     rating, rating_count = _recompute_rating(db, route_id)
     db.commit()
     return RatingOut(rating=rating, rating_count=rating_count, my_rating=None)
+
+
+def _toggle_mark(
+    db: Session,
+    model: type[RouteFavorite] | type[RouteCompletion],
+    route_id: int,
+    user_id: int,
+    on: bool,
+) -> bool:
+    """Zet een persoonlijke markering (favoriet of gereden) aan of uit.
+
+    Idempotent: twee keer aanzetten levert geen dubbele rij op, uitzetten van
+    iets dat er niet staat is geen fout.
+    """
+    existing = db.scalar(
+        select(model).where(model.route_id == route_id, model.user_id == user_id)
+    )
+    if on and existing is None:
+        db.add(model(route_id=route_id, user_id=user_id))
+    elif not on and existing is not None:
+        db.delete(existing)
+    db.commit()
+    return on
+
+
+@router.post("/{route_id}/favorite", response_model=MarkOut)
+def add_favorite(
+    route_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> MarkOut:
+    get_route_or_404(db, route_id)
+    return MarkOut(active=_toggle_mark(db, RouteFavorite, route_id, user.id, True))
+
+
+@router.delete("/{route_id}/favorite", response_model=MarkOut)
+def remove_favorite(
+    route_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> MarkOut:
+    get_route_or_404(db, route_id)
+    return MarkOut(active=_toggle_mark(db, RouteFavorite, route_id, user.id, False))
+
+
+@router.post("/{route_id}/ridden", response_model=MarkOut)
+def add_ridden(
+    route_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> MarkOut:
+    get_route_or_404(db, route_id)
+    return MarkOut(active=_toggle_mark(db, RouteCompletion, route_id, user.id, True))
+
+
+@router.delete("/{route_id}/ridden", response_model=MarkOut)
+def remove_ridden(
+    route_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> MarkOut:
+    get_route_or_404(db, route_id)
+    return MarkOut(active=_toggle_mark(db, RouteCompletion, route_id, user.id, False))

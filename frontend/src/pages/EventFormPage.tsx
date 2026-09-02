@@ -4,6 +4,8 @@ import {
   Button,
   Card,
   Center,
+  Divider,
+  FileInput,
   Group,
   Loader,
   NumberInput,
@@ -18,13 +20,14 @@ import {
 import { DateInput, TimeInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
-import { IconDeviceFloppy } from "@tabler/icons-react";
-import { Link, useNavigate, useParams } from "react-router";
+import { IconDeviceFloppy, IconUpload } from "@tabler/icons-react";
+import { useNavigate, useParams } from "react-router";
 
 import { ApiError, api } from "../api/client";
 import {
   EVENT_TYPE_LABELS,
   type EventInput,
+  type EventRouteUpload,
   type EventType,
   type RouteSummary,
 } from "../api/types";
@@ -64,6 +67,9 @@ export default function EventFormPage() {
   const editing = eventId !== undefined;
 
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
+  const [gpxFile, setGpxFile] = useState<File | null>(null);
+  const [uploaded, setUploaded] = useState<EventRouteUpload | null>(null);
+  const [importing, setImporting] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -132,7 +138,39 @@ export default function EventFormPage() {
   }, [eventId, editing]);
 
   const selectedRoute = routes.find((item) => String(item.id) === form.values.route_id);
-  const distanceLocked = Boolean(selectedRoute && selectedRoute.distance_km !== null);
+  const distanceLocked =
+    Boolean(selectedRoute && selectedRoute.distance_km !== null) || uploaded !== null;
+
+  /** Leest de GPX met hetzelfde importendpoint als de community-routes en
+   *  bewaart het resultaat tot het event wordt opgeslagen. */
+  const handleGpx = async (file: File | null) => {
+    setGpxFile(file);
+    if (!file) {
+      setUploaded(null);
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    try {
+      const preview = await api.importCommunityRouteGpx(file);
+      const name = preview.name?.trim() || file.name.replace(/\.gpx$/i, "");
+      setUploaded({
+        name,
+        distance_km: preview.distance_km,
+        elevation_m: preview.elevation_m,
+        coordinates: preview.coordinates,
+      });
+      form.setFieldValue("route_id", "");
+      if (form.values.name.trim() === "") form.setFieldValue("name", name);
+      form.setFieldValue("distance_km", Number(preview.distance_km.toFixed(1)));
+    } catch (err) {
+      setGpxFile(null);
+      setUploaded(null);
+      setError(err instanceof ApiError ? err.message : "Deze GPX kon niet gelezen worden.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const pickRoute = (value: string | null) => {
     const routeId = value ?? "";
@@ -156,6 +194,7 @@ export default function EventFormPage() {
         name: values.name.trim(),
         event_type: values.event_type,
         route_id: values.route_id ? Number(values.route_id) : null,
+        route_upload: !values.route_id && uploaded ? uploaded : null,
         event_date: values.event_date as string,
         event_time: values.event_time ? `${values.event_time}:00`.slice(0, 8) : null,
         url: values.url.trim() || null,
@@ -235,30 +274,56 @@ export default function EventFormPage() {
               />
             </SimpleGrid>
 
-            <Select
-              label="Route"
-              description="Optioneel; nog geen route in het routeboek? Voeg 'm eerst toe via Community routes."
-              placeholder="Kies een route uit het routeboek"
-              searchable
-              clearable
-              nothingFoundMessage="Geen route gevonden"
-              data={routes.map((route) => ({
-                value: String(route.id),
-                label:
-                  route.distance_km !== null
-                    ? `${route.name} (${route.distance_km.toFixed(0)} km)${route.origin === "community" ? " · Community" : ""}`
-                    : `${route.name}${route.origin === "community" ? " · Community" : ""}`,
-              }))}
-              value={form.values.route_id || null}
-              onChange={pickRoute}
-            />
-            <Text size="xs" c="dimmed" mt={-8}>
-              Nog geen GPX in het routeboek?{" "}
-              <Text component={Link} to="/community/nieuw" c="routeboek.6" span>
-                Upload 'm eerst als community route
-              </Text>{" "}
-              en kies 'm daarna hier.
-            </Text>
+            <Stack gap="xs">
+              <Text size="sm" fw={600}>
+                Parcours (optioneel)
+              </Text>
+              <FileInput
+                label="GPX-bestand"
+                description="Meestal het snelst: download de GPX bij het event en upload 'm hier."
+                placeholder={uploaded ? uploaded.name : "Kies een .gpx-bestand"}
+                accept=".gpx,application/gpx+xml"
+                clearable
+                disabled={Boolean(form.values.route_id)}
+                value={gpxFile}
+                onChange={(file) => void handleGpx(file)}
+                leftSection={<IconUpload size={16} />}
+              />
+              {importing && (
+                <Text size="xs" c="dimmed">
+                  GPX inlezen…
+                </Text>
+              )}
+              {uploaded && (
+                <Text size="xs" c="teal.7">
+                  {uploaded.name} · {uploaded.distance_km?.toFixed(1) ?? "?"} km ·{" "}
+                  {uploaded.elevation_m !== null
+                    ? `${Math.round(uploaded.elevation_m)} hm`
+                    : "? hm"}
+                </Text>
+              )}
+
+              <Divider label="of kies een bestaande route" labelPosition="center" my={4} />
+
+              <Select
+                label="Route uit het routeboek"
+                description="Handig bij een clubrit; anders is de GPX-upload hierboven eenvoudiger."
+                placeholder="Kies een route"
+                searchable
+                clearable
+                disabled={Boolean(uploaded)}
+                nothingFoundMessage="Geen route gevonden"
+                data={routes.map((route) => ({
+                  value: String(route.id),
+                  label:
+                    route.distance_km !== null
+                      ? `${route.name} (${route.distance_km.toFixed(0)} km)${route.origin === "community" ? " · Community" : ""}`
+                      : `${route.name}${route.origin === "community" ? " · Community" : ""}`,
+                }))}
+                value={form.values.route_id || null}
+                onChange={pickRoute}
+              />
+            </Stack>
 
             <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
               <NumberInput

@@ -41,6 +41,11 @@ class RouteOrigin(str, enum.Enum):
     #: Door een lid geüpload; staat in "Community routes" tot een beheerder
     #: het promoveert naar het officiële routeboek.
     community = "community"
+    #: Hoort bij één event (GPX bij het event geüpload). Verschijnt bewust in
+    #: géén van beide overzichten en wordt met het event mee verwijderd; de
+    #: route bestaat alleen zodat kaartminiatuur, GPX-download en de
+    #: detailpagina hergebruikt kunnen worden.
+    event = "event"
 
 
 class RideType(str, enum.Enum):
@@ -401,3 +406,45 @@ class RouteUpvote(Base):
     user: Mapped[User] = relationship()
 
     __table_args__ = (UniqueConstraint("route_id", "user_id", name="uq_route_upvote_user"),)
+
+
+class RouteFavorite(Base):
+    """Route die een lid als favoriet heeft gemarkeerd, hooguit één per lid."""
+
+    __tablename__ = "route_favorites"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    route_id: Mapped[int] = mapped_column(
+        ForeignKey("routes.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("route_id", "user_id", name="uq_route_favorite_user"),
+    )
+
+
+class RouteCompletion(Base):
+    """Afvinkte ("gereden") route van een lid, hooguit één rij per lid."""
+
+    __tablename__ = "route_completions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    route_id: Mapped[int] = mapped_column(
+        ForeignKey("routes.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("route_id", "user_id", name="uq_route_completion_user"),
+    )

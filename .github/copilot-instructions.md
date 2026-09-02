@@ -184,8 +184,12 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
 - `route_comments` — reacties van leden onder een route
 - `route_upvotes` — stemmen van leden op community-routes, uniek per
   route/gebruiker (`Route.upvote_count` is de teller)
+- `route_favorites` — favorietmarkering per lid per route, uniek per paar
+- `route_completions` — afgevinkte ("gereden") routes per lid, uniek per paar
 - `rides` — georganiseerde ritten
 - `ride_participants` — aanmeldingen (uniek per rit/gebruiker)
+- `events` / `event_participants` — externe events en aanmeldingen (incl.
+  vervoerskeuze per deelnemer)
 
 ---
 
@@ -320,6 +324,15 @@ het voorbeeld van het oude routeboek (`rit2.png`):
   ontstaat (`document.documentElement.scrollWidth` moet gelijk zijn aan
   `clientWidth`). De weerstrip en de deelnemerslijst zijn de twee plekken
   die dat het snelst breken.
+- **Gridvalkuil (opgelost, niet opnieuw introduceren):** `.rb-ride-card` is
+  op desktop een grid met `grid-template-columns: 230px minmax(0,1fr)`.
+  Grid-items rekken standaard mee met de rijhoogte (`align-items: stretch`),
+  dus zodra de deelnemerslijst of het weerbericht werd uitgeklapt groeide de
+  linkerkolom mee en werd de `object-fit: cover`-kaart tot een uitvergrote
+  verticale streep bijgesneden. `.rb-ride-media` heeft daarom expliciet
+  `align-self: start` + een vaste `aspect-ratio: 3 / 2` (en `position:
+  sticky; top: 0`, zodat de miniatuur bij een lange uitklap in beeld blijft).
+  Op mobiel speelt dit niet: daar heeft de `img` een vaste hoogte van 165px.
 
 ### Weerbericht bij een rit
 Elke rit met een gekoppelde route toont optioneel een uurlijkse
@@ -453,6 +466,39 @@ gedeelde helper `app/rating.py:recompute_rating()`, aangeroepen door zowel
 stem/verwijdering). Zo blijft historische informatie behouden zonder dat
 scrapete "stemmen" een eigen gebruikersaccount nodig hebben.
 
+### Favorieten en gereden routes
+Elk lid kan een route als **favoriet** markeren en afvinken als **gereden**.
+Twee losse tabellen (`route_favorites`, `route_completions`), allebei
+opgebouwd als kopie van `RouteUpvote`: `(route_id, user_id, created_at)` met
+een unieke constraint op het paar en `ondelete=CASCADE` op beide FK's. Geen
+gedenormaliseerde teller — anders dan bij upvotes wordt het aantal nergens
+getoond, dus is er niets bij te houden.
+
+- Endpoints staan in `app/routers/social.py` en zijn bewust **idempotent**:
+  `POST`/`DELETE /api/routes/{id}/favorite` en `.../ridden` geven altijd
+  `{"active": true|false}` terug, ook als de markering al (niet) bestond.
+  Zo maakt het niet uit of een dubbelklik of een herhaalde request binnenkomt.
+  Ze gelden voor **elke** route, ongeacht origin.
+- `RouteSummary` heeft `is_favorite` en `is_ridden`. Die worden in een
+  overzicht opgehaald met `marked_route_ids()` (`app/routers/routes.py`):
+  **twee queries per pagina**, niet twee per kaart. Ga dit niet per route
+  opvragen — een pagina heeft 24 kaarten.
+- Filters: `favorite=true` (alleen favorieten) en `ridden=true|false`
+  (`false` = "welke heb ik nog niet gereden", het meest gevraagde geval).
+  Beide zijn `EXISTS`-subqueries in `apply_route_filters()` en werken alleen
+  met een `viewer_id`; ze gelden dus automatisch ook op het
+  community-overzicht.
+- Frontend: hart- en vinkknop zweven over de kaartminiatuur
+  (`.rb-route-marks` in `styles.css`). Omdat de hele `RouteCard` één `<Link>`
+  is, moeten die knoppen `preventDefault()` + `stopPropagation()` doen
+  (helper `swallow()` in `RouteCard.tsx`) — anders navigeert een klik door
+  naar de detailpagina. De statuswijziging is **optimistisch** en wordt bij
+  een serverfout teruggedraaid (`src/api/marks.ts`, gedeeld door beide
+  overzichtspagina's); dezelfde knoppen staan als volwaardige buttons op
+  `RouteDetailPage`. De filters staan onder het kopje "Persoonlijk" in
+  `RouteFilters.tsx` — vergeet bij nieuwe filtervelden nooit `EMPTY_FILTERS`
+  en `hasActiveFilters()` mee bij te werken.
+
 ### Community routes
 Elk lid mag zelf een route aanleveren. Dit is bewust **geen aparte tabel**:
 een community-route is gewoon een rij in `routes` met `Route.origin =
@@ -487,11 +533,23 @@ niets meer dan `origin` terugzetten op `"official"`
   herberekend); `GET /api/community/routes` levert ook `my_upvote` per
   ingelogde gebruiker mee via één gebatchte query.
 - **`/api/routes` (het officiële overzicht) sluit community-routes altijd
-  uit** (`_apply_filters()` filtert op `origin == official`); de losse
-  detailpagina/`GET /api/routes/{id}` is bewust origin-agnostisch en werkt
-  ongewijzigd voor beide soorten routes. `submitted_by` (de weergavenaam van
-  de aanbieder) wordt alleen lazy geladen wanneer `origin == community`, om
-  geen N+1-query te introduceren op de veelgebruikte officiële lijst.
+  uit** (`apply_route_filters()` filtert op de meegegeven `origin`, standaard
+  `official`); de losse detailpagina/`GET /api/routes/{id}` is bewust
+  origin-agnostisch en werkt ongewijzigd voor beide soorten routes.
+  `submitted_by` (de weergavenaam van de aanbieder) wordt alleen lazy geladen
+  wanneer `origin == community`, om geen N+1-query te introduceren op de
+  veelgebruikte officiële lijst.
+- **Het community-overzicht is een volwaardig routeoverzicht.**
+  `GET /api/community/routes` geeft een `RoutePage` terug (paginering +
+  `distance_min`/`distance_max` voor de slider) en accepteert exact dezelfde
+  filterparameters als `/api/routes`; beide roepen `apply_route_filters()`
+  aan uit `app/routers/routes.py`, alleen met een andere `origin` en een
+  andere standaardsortering (`upvotes` i.p.v. `distance_asc`). Voeg een
+  nieuw filter dus **één keer** toe, in `apply_route_filters()`, niet twee
+  keer. Aan de voorkant delen `RoutesPage.tsx` en `CommunityRoutesPage.tsx`
+  dezelfde `RouteFilters`-sidebar (met mobiele `Drawer`) en dezelfde
+  `RouteCard`; de community-variant zet er alleen `onToggleUpvote` en
+  `onDelete` bij.
 - Voor community-routes wordt **geen fysiek GPX/TCX-bestand** weggeschreven;
   `coordinates` (`[[lat, lon], ...]`, dezelfde conventie als elders) is de
   bron van waarheid en de bestaande GPX-downloadendpoint gebruikt hiervoor
@@ -537,14 +595,28 @@ paar kernverschillen:
   `own_transport`/`bike`) op `EventParticipant`, gekozen bij het aanmelden
   (`POST /api/events/{id}/join`) en aanpasbaar door opnieuw aan te melden
   (upsert, geen dubbele rij).
-- **Route-koppeling hergebruikt de bestaande `Route`-tabel** (officieel én
-  community) via `Event.route_id`, precies zoals `Ride.route_id`. Er is
-  bewust **geen eigen GPX-upload op het event-formulier gebouwd** — dat zou
-  de kaart/GPX/waterpunten-infrastructuur dupliceren. Wil iemand een eigen
-  GPX aan een event hangen? Upload 'm eerst als community-route, koppel 'm
-  daarna aan het event via dezelfde route-dropdown die ook bij ritten wordt
-  gebruikt (`api.allRoutesForRideForm()`). Dit is een bewuste
-  scope-inperking, geen bug.
+- **Route-koppeling hergebruikt de bestaande `Route`-tabel** via
+  `Event.route_id`, precies zoals `Ride.route_id`. Er zijn twee manieren om
+  een parcours mee te geven, en op het formulier staat de **GPX-upload
+  bovenaan** omdat die in de praktijk veruit het vaakst gebruikt wordt (een
+  externe sportive staat per definitie niet in het clubrouteboek); de
+  routekeuzelijst staat eronder als alternatief voor de zeldzame clubrit.
+  Beide velden sluiten elkaar wederzijds uit (het ene wordt `disabled` zodra
+  het andere is ingevuld).
+- **Een geüploade event-GPX wordt een verborgen `Route` met
+  `origin = "event"`** (derde waarde van `RouteOrigin`). Zo krijgen events
+  gratis de kaartminiatuur, GPX/TCX-download, waterpunten en detailpagina,
+  zonder die infrastructuur te dupliceren. Zo'n route verschijnt bewust in
+  **geen enkel overzicht**: `/api/routes` filtert op `official`,
+  `/api/community/routes` op `community` en `GET /api/admin/routes` sluit
+  `origin == event` expliciet uit. De frontend hergebruikt hiervoor het
+  bestaande preview-endpoint `POST /api/community/routes/import` en stuurt
+  de coördinaten mee als `route_upload` in de event-payload.
+- **Event-routes worden opgeruimd met hun event mee** (`_drop_event_route()`
+  in `routers/events.py`): bij het verwijderen van een event én bij het
+  wisselen naar een andere route. Zonder dat blijven er onzichtbare
+  wees-routes in de database achter die nergens meer te bereiken zijn.
+  Verwijder deze opruimlogica niet bij het uitbreiden van de event-CRUD.
 - **`event_time` is optioneel** (i.t.t. `ride_time`, dat verplicht is) —
   een meerdaagse tocht heeft niet altijd één vast starttijdstip.
   `max_participants` heeft een ruimer bereik (2–200, vrij invoerveld) dan

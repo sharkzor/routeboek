@@ -16,7 +16,16 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.deps import current_user
-from app.models import Route, RouteOrigin, RouteRating, RouteType, RouteUpvote, User
+from app.models import (
+    Route,
+    RouteCompletion,
+    RouteFavorite,
+    RouteOrigin,
+    RouteRating,
+    RouteType,
+    RouteUpvote,
+    User,
+)
 from app.route_thumbnail import render_route_thumbnail_png
 from app.schemas import RouteDetail, RoutePage, RouteSummary
 from app.water.processing import build_gpx_from_coordinates
@@ -31,6 +40,7 @@ SORT_OPTIONS = {
     "elevation_desc": (Route.elevation_m.desc().nullslast(),),
     "rating_desc": (Route.rating.desc().nullslast(), Route.name.asc()),
     "recent": (Route.created_at.desc(), Route.id.desc()),
+    "upvotes": (Route.upvote_count.desc(), Route.created_at.desc()),
 }
 
 
@@ -40,7 +50,13 @@ def media_url(route: Route, kind: str) -> str | None:
     return None
 
 
-def to_summary(route: Route, my_upvote: bool = False, viewer: User | None = None) -> RouteSummary:
+def to_summary(
+    route: Route,
+    my_upvote: bool = False,
+    viewer: User | None = None,
+    is_favorite: bool = False,
+    is_ridden: bool = False,
+) -> RouteSummary:
     # Lazy load van created_by kost alleen een extra query bij community routes
     # (klein aantal); voor de officiële lijst (verreweg de meeste rijen) wordt
     # dit nooit aangeraakt.
@@ -73,10 +89,41 @@ def to_summary(route: Route, my_upvote: bool = False, viewer: User | None = None
         submitted_by=submitted_by,
         my_upvote=my_upvote,
         can_delete=can_delete,
+        is_favorite=is_favorite,
+        is_ridden=is_ridden,
     )
 
 
-def _apply_filters(
+def marked_route_ids(
+    db: Session, user_id: int, route_ids: list[int]
+) -> tuple[set[int], set[int]]:
+    """Favoriet- en gereden-markeringen van één lid voor een pagina routes.
+
+    In één query per soort, zodat een overzicht van 24 kaarten geen 48 losse
+    queries veroorzaakt.
+    """
+    if not route_ids:
+        return set(), set()
+    favorites = set(
+        db.scalars(
+            select(RouteFavorite.route_id).where(
+                RouteFavorite.user_id == user_id,
+                RouteFavorite.route_id.in_(route_ids),
+            )
+        ).all()
+    )
+    ridden = set(
+        db.scalars(
+            select(RouteCompletion.route_id).where(
+                RouteCompletion.user_id == user_id,
+                RouteCompletion.route_id.in_(route_ids),
+            )
+        ).all()
+    )
+    return favorites, ridden
+
+
+def apply_route_filters(
     stmt: Select,
     search: str | None,
     km_min: float | None,
@@ -85,10 +132,15 @@ def _apply_filters(
     route_type: RouteType | None,
     min_rating: float | None,
     categories: list[str] | None,
+    origin: RouteOrigin = RouteOrigin.official,
+    viewer_id: int | None = None,
+    favorite: bool | None = None,
+    ridden: bool | None = None,
 ) -> Select:
-    # De officiële routebrowsing toont bewust nooit community-inzendingen;
-    # die staan apart onder "Community routes" tot een beheerder ze promoveert.
-    stmt = stmt.where(Route.is_active.is_(True), Route.origin == RouteOrigin.official)
+    # Het officiële routeoverzicht toont bewust nooit community-inzendingen en
+    # ook geen event-routes; die hebben hun eigen pagina respectievelijk horen
+    # alleen bij één event.
+    stmt = stmt.where(Route.is_active.is_(True), Route.origin == origin)
 
     if search:
         pattern = f"%{search.strip()}%"
@@ -108,6 +160,26 @@ def _apply_filters(
         stmt = stmt.where(Route.rating >= min_rating)
     if categories:
         stmt = stmt.where(Route.categories.overlap([c.lower() for c in categories]))
+    if viewer_id is not None and favorite is not None:
+        exists = (
+            select(RouteFavorite.id)
+            .where(
+                RouteFavorite.route_id == Route.id,
+                RouteFavorite.user_id == viewer_id,
+            )
+            .exists()
+        )
+        stmt = stmt.where(exists if favorite else ~exists)
+    if viewer_id is not None and ridden is not None:
+        exists = (
+            select(RouteCompletion.id)
+            .where(
+                RouteCompletion.route_id == Route.id,
+                RouteCompletion.user_id == viewer_id,
+            )
+            .exists()
+        )
+        stmt = stmt.where(exists if ridden else ~exists)
     return stmt
 
 
@@ -120,19 +192,31 @@ def list_routes(
     route_type: RouteType | None = None,
     min_rating: float | None = Query(default=None, ge=0, le=5),
     category: list[str] | None = Query(default=None),
+    favorite: bool | None = Query(default=None),
+    ridden: bool | None = Query(default=None),
     sort: str = Query(default="distance_asc"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=24, ge=1, le=100),
     db: Session = Depends(get_db),
-    _: User = Depends(current_user),
+    user: User = Depends(current_user),
 ) -> RoutePage:
     if sort not in SORT_OPTIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Onbekende sortering."
         )
 
-    stmt = _apply_filters(
-        select(Route), search, km_min, km_max, wind, route_type, min_rating, category
+    stmt = apply_route_filters(
+        select(Route),
+        search,
+        km_min,
+        km_max,
+        wind,
+        route_type,
+        min_rating,
+        category,
+        viewer_id=user.id,
+        favorite=favorite,
+        ridden=ridden,
     )
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
@@ -142,6 +226,8 @@ def list_routes(
         .limit(page_size)
     ).all()
 
+    favorites, ridden_ids = marked_route_ids(db, user.id, [r.id for r in rows])
+
     # Grenzen voor de kilometerslider: over alle actieve routes, niet de selectie.
     bounds = db.execute(
         select(func.min(Route.distance_km), func.max(Route.distance_km)).where(
@@ -150,7 +236,15 @@ def list_routes(
     ).one()
 
     return RoutePage(
-        items=[to_summary(r) for r in rows],
+        items=[
+            to_summary(
+                r,
+                viewer=user,
+                is_favorite=r.id in favorites,
+                is_ridden=r.id in ridden_ids,
+            )
+            for r in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -164,8 +258,16 @@ def to_detail(
     my_rating: int | None = None,
     my_upvote: bool = False,
     viewer: User | None = None,
+    is_favorite: bool = False,
+    is_ridden: bool = False,
 ) -> RouteDetail:
-    summary = to_summary(route, my_upvote=my_upvote, viewer=viewer)
+    summary = to_summary(
+        route,
+        my_upvote=my_upvote,
+        viewer=viewer,
+        is_favorite=is_favorite,
+        is_ridden=is_ridden,
+    )
     return RouteDetail(
         **summary.model_dump(),
         description_html=route.description_html,
@@ -205,11 +307,14 @@ def route_detail(
             )
             is not None
         )
+    favorites, ridden_ids = marked_route_ids(db, user.id, [route.id])
     return to_detail(
         route,
         my_rating=existing.value if existing else None,
         my_upvote=my_upvote,
         viewer=user,
+        is_favorite=route.id in favorites,
+        is_ridden=route.id in ridden_ids,
     )
 
 

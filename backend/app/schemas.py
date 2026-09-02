@@ -119,6 +119,8 @@ class RouteSummary(BaseModel):
     submitted_by: str | None = None
     my_upvote: bool = False
     can_delete: bool = False
+    is_favorite: bool = False
+    is_ridden: bool = False
 
 
 class RouteDetail(RouteSummary):
@@ -299,6 +301,12 @@ class UpvoteOut(BaseModel):
     my_upvote: bool
 
 
+class MarkOut(BaseModel):
+    """Resultaat van een persoonlijke markering (favoriet / gereden)."""
+
+    active: bool
+
+
 # --------------------------------------------------------------------- ritten
 
 
@@ -392,10 +400,25 @@ class RideDefaults(BaseModel):
 # -------------------------------------------------------------------- events
 
 
+class EventRouteUploadIn(BaseModel):
+    """Geïmporteerde GPX die bij één event hoort.
+
+    Levert een verborgen `Route` met `origin="event"`, zodat kaartminiatuur,
+    GPX-download en waterpunten gratis meekomen zonder dat het event-parcours
+    in het routeboek of de community-lijst opduikt.
+    """
+
+    name: str = Field(min_length=2, max_length=200)
+    distance_km: float | None = Field(default=None, ge=0, le=2000)
+    elevation_m: float | None = Field(default=None, ge=0, le=30_000)
+    coordinates: list[list[float]] = Field(min_length=2, max_length=20_000)
+
+
 class EventCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     event_type: EventType = EventType.sportive
     route_id: int | None = None
+    route_upload: EventRouteUploadIn | None = None
     event_date: date
     event_time: time | None = None
     url: str | None = Field(default=None, max_length=500)
@@ -410,6 +433,7 @@ class EventUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=200)
     event_type: EventType | None = None
     route_id: int | None = None
+    route_upload: EventRouteUploadIn | None = None
     event_date: date | None = None
     event_time: time | None = None
     url: str | None = Field(default=None, max_length=500)

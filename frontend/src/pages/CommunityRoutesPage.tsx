@@ -1,76 +1,100 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  ActionIcon,
-  Badge,
+  Alert,
+  Box,
   Button,
-  Card,
+  Center,
+  Drawer,
   Group,
-  Image,
+  Loader,
   Modal,
+  Pagination,
+  Select,
   SimpleGrid,
-  Skeleton,
   Stack,
   Text,
-  TextInput,
   Title,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDebouncedValue, useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import {
-  IconArrowUpRight,
-  IconBike,
-  IconPlus,
-  IconSearch,
-  IconThumbUp,
-  IconTrash,
-} from "@tabler/icons-react";
+import { IconFilter, IconMoodEmpty, IconPlus } from "@tabler/icons-react";
 import { Link } from "react-router";
 
+import RouteCard from "../components/RouteCard";
+import RouteFilters, { EMPTY_FILTERS, hasActiveFilters } from "../components/RouteFilters";
 import { ApiError, api } from "../api/client";
-import { ROUTE_TYPE_LABELS, type RouteSummary } from "../api/types";
+import { routeMarkHandlers } from "../api/marks";
+import type { RouteFilterState, RoutePage, RouteSummary } from "../api/types";
+
+const PAGE_SIZE = 24;
+
+// Standaard op stemmen gesorteerd: de best gewaardeerde inzendingen bovenaan.
+const START_FILTERS: RouteFilterState = { ...EMPTY_FILTERS, sort: "upvotes" };
+
+const SORT_OPTIONS = [
+  { value: "upvotes", label: "Meeste stemmen" },
+  { value: "recent", label: "Nieuwste eerst" },
+  { value: "name", label: "Naam (A-Z)" },
+  { value: "distance_asc", label: "Afstand (kort → lang)" },
+  { value: "distance_desc", label: "Afstand (lang → kort)" },
+  { value: "elevation_desc", label: "Hoogtemeters (veel → weinig)" },
+  { value: "elevation_asc", label: "Hoogtemeters (weinig → veel)" },
+  { value: "rating_desc", label: "Best beoordeeld" },
+];
 
 export default function CommunityRoutesPage() {
-  const [routes, setRoutes] = useState<RouteSummary[] | null>(null);
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<RouteFilterState>(START_FILTERS);
+  const [debouncedFilters] = useDebouncedValue(filters, 300);
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<RoutePage | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [drawerOpened, drawer] = useDisclosure(false);
+  const isMobile = useMediaQuery("(max-width: 62em)");
+
   const [pending, setPending] = useState<RouteSummary | null>(null);
   const [deleteOpened, deleteModal] = useDisclosure(false);
   const [deleting, setDeleting] = useState(false);
 
-  const load = async (query?: string) => {
-    try {
-      const result = await api.communityRoutes(query || undefined, "upvotes");
-      setRoutes(result);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Laden is mislukt.");
-    }
-  };
+  const marks = useMemo(() => routeMarkHandlers(setData), []);
 
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setPage(1);
+  }, [debouncedFilters]);
 
-  const toggleUpvote = async (route: RouteSummary) => {
-    if (!routes) return;
-    try {
-      const result = route.my_upvote
-        ? await api.removeUpvote(route.id)
-        : await api.upvoteRoute(route.id);
-      setRoutes(
-        routes.map((r) =>
-          r.id === route.id
-            ? { ...r, upvote_count: result.upvote_count, my_upvote: result.my_upvote }
-            : r,
-        ),
-      );
-    } catch (err) {
-      notifications.show({
-        message: err instanceof ApiError ? err.message : "Stemmen is mislukt.",
-        color: "red",
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api
+      .communityRoutes(debouncedFilters, page, PAGE_SIZE)
+      .then((response) => {
+        if (!cancelled) {
+          setData(response);
+          setError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.message : "Routes laden is mislukt.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-    }
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedFilters, page]);
+
+  const bounds = useMemo(
+    () => ({
+      min: Math.floor((data?.distance_min ?? 0) / 5) * 5,
+      max: Math.ceil((data?.distance_max ?? 200) / 5) * 5,
+    }),
+    [data?.distance_min, data?.distance_max],
+  );
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1;
 
   const confirmDelete = (route: RouteSummary) => {
     setPending(route);
@@ -82,7 +106,15 @@ export default function CommunityRoutesPage() {
     setDeleting(true);
     try {
       await api.deleteCommunityRoute(pending.id);
-      setRoutes((current) => (current ? current.filter((r) => r.id !== pending.id) : current));
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.filter((r) => r.id !== pending.id),
+              total: Math.max(0, current.total - 1),
+            }
+          : current,
+      );
       notifications.show({ message: "Route is verwijderd.", color: "green" });
     } catch (err) {
       notifications.show({
@@ -96,127 +128,138 @@ export default function CommunityRoutesPage() {
     }
   };
 
+  const filterPanel = (
+    <RouteFilters
+      value={filters}
+      onChange={(next) => {
+        setFilters(next);
+        if (isMobile) drawer.close();
+      }}
+      bounds={bounds}
+    />
+  );
+
   return (
     <Stack gap="lg">
-      <Group justify="space-between" wrap="wrap">
-        <Stack gap={2}>
+      <Group justify="space-between" align="flex-end" wrap="wrap">
+        <Box>
           <Title order={2}>Community routes</Title>
           <Text c="dimmed" size="sm">
-            Door leden aangeleverde routes. Stem op je favorieten, of lever er zelf een aan.
+            {data
+              ? `${data.total} door leden aangeleverde routes`
+              : "Community routes laden…"}
           </Text>
-        </Stack>
-        <Button component={Link} to="/community/nieuw" color="routeboek" leftSection={<IconPlus size={16} />}>
-          Route aanleveren
-        </Button>
+        </Box>
+        <Group gap="sm">
+          {isMobile && (
+            <Button
+              variant="light"
+              color="routeboek"
+              leftSection={<IconFilter size={16} />}
+              onClick={drawer.open}
+            >
+              Filters{hasActiveFilters(filters) ? " •" : ""}
+            </Button>
+          )}
+          <Select
+            data={SORT_OPTIONS}
+            value={filters.sort}
+            onChange={(sort) => setFilters({ ...filters, sort: sort ?? "upvotes" })}
+            allowDeselect={false}
+            w={230}
+            aria-label="Sorteren"
+          />
+          <Button
+            component={Link}
+            to="/community/nieuw"
+            color="routeboek"
+            leftSection={<IconPlus size={16} />}
+          >
+            Route aanleveren
+          </Button>
+        </Group>
       </Group>
 
-      <TextInput
-        placeholder="Zoek op naam…"
-        leftSection={<IconSearch size={16} />}
-        value={search}
-        onChange={(event) => {
-          const value = event.currentTarget.value;
-          setSearch(value);
-          void load(value);
-        }}
-        maw={360}
-      />
+      <Group align="flex-start" gap="lg" wrap="nowrap">
+        {!isMobile && (
+          <Box w={280} style={{ flexShrink: 0, position: "sticky", top: 88 }}>
+            {filterPanel}
+          </Box>
+        )}
 
-      {error && <Text c="red">{error}</Text>}
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          {error && (
+            <Alert color="red" variant="light" mb="md">
+              {error}
+            </Alert>
+          )}
 
-      {!routes ? (
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} height={220} radius="md" />
-          ))}
-        </SimpleGrid>
-      ) : routes.length === 0 ? (
-        <Text c="dimmed">Nog geen community routes. Lever de eerste aan!</Text>
-      ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-          {routes.map((route) => (
-            <Card key={route.id} padding={0} radius="md" withBorder style={{ overflow: "hidden" }}>
-              <Link to={`/routes/${route.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                <Image
-                  src={route.map_url ?? "/brand/map-pattern.png"}
-                  alt={`Kaart van ${route.name}`}
-                  className="rb-map-thumb"
-                  fallbackSrc="/brand/map-pattern.png"
-                />
-              </Link>
-              <Stack gap={6} p="md">
-                <Group justify="space-between" wrap="nowrap" align="flex-start">
-                  <Text
-                    component={Link}
-                    to={`/routes/${route.id}`}
-                    fw={700}
-                    lineClamp={2}
-                    title={route.name}
-                    style={{ textDecoration: "none", color: "inherit" }}
+          {loading && !data ? (
+            <Center py="xl">
+              <Loader color="routeboek" />
+            </Center>
+          ) : data && data.items.length === 0 ? (
+            <Center py="xl">
+              <Stack align="center" gap="xs">
+                <IconMoodEmpty size={40} color="#adb5bd" />
+                <Text c="dimmed">
+                  {hasActiveFilters(filters)
+                    ? "Geen community routes gevonden met deze filters."
+                    : "Nog geen community routes. Lever de eerste aan!"}
+                </Text>
+                {hasActiveFilters(filters) && (
+                  <Button
+                    variant="light"
+                    color="routeboek"
+                    onClick={() => setFilters({ ...EMPTY_FILTERS, sort: filters.sort })}
                   >
-                    {route.name}
-                  </Text>
-                  <Group gap={4} wrap="nowrap">
-                    <ActionIcon
-                      variant={route.my_upvote ? "filled" : "light"}
-                      color="routeboek"
-                      onClick={() => void toggleUpvote(route)}
-                      aria-label="Stem op deze route"
-                    >
-                      <IconThumbUp size={16} />
-                    </ActionIcon>
-                    <Text size="sm" fw={600}>
-                      {route.upvote_count}
-                    </Text>
-                    {route.can_delete && (
-                      <ActionIcon
-                        variant="light"
-                        color="red"
-                        onClick={() => confirmDelete(route)}
-                        aria-label="Verwijder deze route"
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    )}
-                  </Group>
-                </Group>
-
-                <Group gap="xs" wrap="nowrap">
-                  <Group gap={4} wrap="nowrap">
-                    <IconBike size={16} color="var(--rb-red)" />
-                    <Text size="sm" fw={600}>
-                      {route.distance_km !== null ? `${route.distance_km.toFixed(1)} km` : "– km"}
-                    </Text>
-                  </Group>
-                  <Group gap={4} wrap="nowrap">
-                    <IconArrowUpRight size={16} color="var(--rb-red)" />
-                    <Text size="sm" fw={600}>
-                      {route.elevation_m !== null ? `${Math.round(route.elevation_m)} hm` : "– hm"}
-                    </Text>
-                  </Group>
-                </Group>
-
-                <Group gap={6}>
-                  <Badge size="sm" variant="light" color="routeboek">
-                    {ROUTE_TYPE_LABELS[route.route_type]}
-                  </Badge>
-                  {route.wind_directions.map((wind) => (
-                    <Badge key={wind} size="sm" variant="outline" color="gray">
-                      {route.wind_estimated ? `~${wind}` : wind}
-                    </Badge>
-                  ))}
-                </Group>
-
-                {route.submitted_by && (
-                  <Text size="xs" c="dimmed">
-                    Aangeleverd door {route.submitted_by}
-                  </Text>
+                    Filters wissen
+                  </Button>
                 )}
               </Stack>
-            </Card>
-          ))}
-        </SimpleGrid>
-      )}
+            </Center>
+          ) : (
+            <Stack gap="lg" opacity={loading ? 0.6 : 1}>
+              <SimpleGrid cols={{ base: 1, xs: 2, md: 2, lg: 3, xl: 4 }} spacing="md">
+                {data?.items.map((route) => (
+                  <RouteCard
+                    key={route.id}
+                    route={route}
+                    onToggleFavorite={marks.onToggleFavorite}
+                    onToggleRidden={marks.onToggleRidden}
+                    onToggleUpvote={marks.onToggleUpvote}
+                    onDelete={confirmDelete}
+                  />
+                ))}
+              </SimpleGrid>
+
+              {pageCount > 1 && (
+                <Center>
+                  <Pagination
+                    total={pageCount}
+                    value={page}
+                    onChange={(next) => {
+                      setPage(next);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    color="routeboek"
+                  />
+                </Center>
+              )}
+            </Stack>
+          )}
+        </Box>
+      </Group>
+
+      <Drawer
+        opened={drawerOpened}
+        onClose={drawer.close}
+        title="Filters"
+        position="left"
+        size="sm"
+      >
+        {filterPanel}
+      </Drawer>
 
       <Modal opened={deleteOpened} onClose={deleteModal.close} title="Route verwijderen">
         <Stack gap="md">

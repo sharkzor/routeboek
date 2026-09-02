@@ -44,11 +44,13 @@ export interface RouteSummary {
   has_gpx: boolean;
   has_tcx: boolean;
   is_active: boolean;
-  origin: "official" | "community";
+  origin: "official" | "community" | "event";
   upvote_count: number;
   submitted_by: string | null;
   my_upvote: boolean;
   can_delete: boolean;
+  is_favorite: boolean;
+  is_ridden: boolean;
 }
 
 export interface RouteDetail extends RouteSummary {
@@ -82,6 +84,11 @@ export interface CommunityRouteCreateIn {
 export interface UpvoteResult {
   upvote_count: number;
   my_upvote: boolean;
+}
+
+/** Resultaat van een persoonlijke markering (favoriet / gereden). */
+export interface MarkResult {
+  active: boolean;
 }
 
 export interface Comment {
@@ -210,10 +217,19 @@ export interface EventItem {
   can_edit: boolean;
 }
 
+export interface EventRouteUpload {
+  name: string;
+  distance_km: number | null;
+  elevation_m: number | null;
+  coordinates: [number, number][];
+}
+
 export interface EventInput {
   name: string;
   event_type: EventType;
   route_id?: number | null;
+  /** Geüploade GPX die alleen bij dit event hoort. */
+  route_upload?: EventRouteUpload | null;
   event_date: string;
   event_time?: string | null;
   url?: string | null;
@@ -262,6 +278,10 @@ export interface RouteFilterState {
   routeType: RouteType | null;
   minRating: number | null;
   categories: CategoryCode[];
+  /** true = alleen favorieten; null = geen filter. */
+  favorite: boolean | null;
+  /** true = alleen gereden, false = alleen nog niet gereden, null = geen filter. */
+  ridden: boolean | null;
   sort: string;
 }
 

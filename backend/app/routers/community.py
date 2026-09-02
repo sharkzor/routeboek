@@ -21,21 +21,24 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
 from app.deps import current_user
-from app.models import Route, RouteOrigin, RouteUpvote, User
+from app.models import Route, RouteOrigin, RouteType, RouteUpvote, User
 from app.route_import import RouteImportError, import_from_gpx_bytes
-from app.routers.routes import get_route_or_404, to_detail, to_summary
+from app.routers.routes import SORT_OPTIONS as ROUTE_SORT_OPTIONS
+from app.routers.routes import apply_route_filters
+from app.routers.routes import get_route_or_404, marked_route_ids, to_detail, to_summary
 from app.routes_common import slugify, unique_slug
 from app.schemas import (
     CommunityRouteCreateIn,
     Message,
     RouteDetail,
     RouteImportPreview,
+    RoutePage,
     RouteSummary,
     UpvoteOut,
 )
@@ -51,34 +54,86 @@ SORT_OPTIONS = {
 }
 
 
-@router.get("/routes", response_model=list[RouteSummary])
+@router.get("/routes", response_model=RoutePage)
 def list_community_routes(
     search: str | None = None,
+    km_min: float | None = Query(default=None, ge=0),
+    km_max: float | None = Query(default=None, ge=0),
+    wind: list[str] | None = Query(default=None),
+    route_type: RouteType | None = None,
+    min_rating: float | None = Query(default=None, ge=0, le=5),
+    category: list[str] | None = Query(default=None),
+    favorite: bool | None = Query(default=None),
+    ridden: bool | None = Query(default=None),
     sort: str = Query(default="upvotes"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=24, ge=1, le=100),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
-) -> list[RouteSummary]:
-    if sort not in SORT_OPTIONS:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Onbekende sortering.")
+) -> RoutePage:
+    # Het community-overzicht deelt de filterlogica met het officiële
+    # routeboek; alleen de origin en de standaardsortering verschillen.
+    if sort not in ROUTE_SORT_OPTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Onbekende sortering."
+        )
 
-    stmt = select(Route).where(
-        Route.origin == RouteOrigin.community, Route.is_active.is_(True)
+    stmt = apply_route_filters(
+        select(Route),
+        search,
+        km_min,
+        km_max,
+        wind,
+        route_type,
+        min_rating,
+        category,
+        origin=RouteOrigin.community,
+        viewer_id=user.id,
+        favorite=favorite,
+        ridden=ridden,
     )
-    if search:
-        stmt = stmt.where(Route.name.ilike(f"%{search.strip()}%"))
-    routes = db.scalars(stmt.order_by(*SORT_OPTIONS[sort])).all()
 
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    routes = db.scalars(
+        stmt.order_by(*ROUTE_SORT_OPTIONS[sort])
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    route_ids = [r.id for r in routes]
     my_upvotes = set(
         db.scalars(
             select(RouteUpvote.route_id).where(
                 RouteUpvote.user_id == user.id,
-                RouteUpvote.route_id.in_([r.id for r in routes]),
+                RouteUpvote.route_id.in_(route_ids),
             )
         ).all()
     )
-    return [
-        to_summary(route, my_upvote=route.id in my_upvotes, viewer=user) for route in routes
-    ]
+    favorites, ridden_ids = marked_route_ids(db, user.id, route_ids)
+
+    bounds = db.execute(
+        select(func.min(Route.distance_km), func.max(Route.distance_km)).where(
+            Route.is_active.is_(True), Route.origin == RouteOrigin.community
+        )
+    ).one()
+
+    return RoutePage(
+        items=[
+            to_summary(
+                route,
+                my_upvote=route.id in my_upvotes,
+                viewer=user,
+                is_favorite=route.id in favorites,
+                is_ridden=route.id in ridden_ids,
+            )
+            for route in routes
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        distance_min=bounds[0],
+        distance_max=bounds[1],
+    )
 
 
 @router.post("/routes/import", response_model=RouteImportPreview)

@@ -51,6 +51,18 @@ body {
   display: block;
 }
 
+/* Favoriet- en gereden-knoppen zweven over de kaartminiatuur. */
+.rb-route-thumb-wrap {
+  position: relative;
+}
+
+.rb-route-marks {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
 .rb-ride-thumb {
   width: 120px;
   height: 120px;
@@ -97,9 +109,21 @@ body {
 }
 
 @media (min-width: 48em) {
+  /* Niet meerekken met de kaarthoogte: een grid-item strekt standaard mee met
+     de rij, en zodra deelnemers of het weerbericht uitklappen werd de 230px
+     brede kolom zo hoog dat object-fit:cover de kaart tot een uitvergrote
+     sliver bijsneed. Vaste verhouding + align-self:start houdt de miniatuur
+     altijd dezelfde vorm; sticky laat 'm meelopen bij een lange kaart. */
+  .rb-ride-media {
+    align-self: start;
+    aspect-ratio: 3 / 2;
+    position: sticky;
+    top: 0;
+    border-bottom-right-radius: var(--mantine-radius-md);
+  }
+
   .rb-ride-media img {
     height: 100%;
-    min-height: 100%;
     position: absolute;
     inset: 0;
   }

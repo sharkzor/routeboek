@@ -24,8 +24,11 @@ import {
   IconBike,
   IconBrandStrava,
   IconCalendarPlus,
+  IconCheck,
   IconDownload,
   IconDroplet,
+  IconHeart,
+  IconHeartFilled,
   IconThumbUp,
   IconTrash,
   IconTrophy,
@@ -114,6 +117,18 @@ export default function RouteDetailPage() {
       );
     } catch {
       setRoute(previous);
+    }
+  };
+
+  const toggleMark = async (kind: "favorite" | "ridden", next: boolean) => {
+    if (!route) return;
+    const key = kind === "favorite" ? "is_favorite" : "is_ridden";
+    setRoute((current) => (current ? { ...current, [key]: next } : current));
+    try {
+      if (kind === "favorite") await api.setFavorite(route.id, next);
+      else await api.setRidden(route.id, next);
+    } catch {
+      setRoute((current) => (current ? { ...current, [key]: !next } : current));
     }
   };
 
@@ -207,6 +222,24 @@ export default function RouteDetailPage() {
           </Group>
         </Box>
         <Group gap="sm" wrap="wrap">
+          <Button
+            variant={route.is_favorite ? "filled" : "light"}
+            color="routeboek"
+            leftSection={
+              route.is_favorite ? <IconHeartFilled size={18} /> : <IconHeart size={18} />
+            }
+            onClick={() => void toggleMark("favorite", !route.is_favorite)}
+          >
+            {route.is_favorite ? "Favoriet" : "Favoriet maken"}
+          </Button>
+          <Button
+            variant={route.is_ridden ? "filled" : "light"}
+            color="teal"
+            leftSection={<IconCheck size={18} />}
+            onClick={() => void toggleMark("ridden", !route.is_ridden)}
+          >
+            {route.is_ridden ? "Gereden" : "Afvinken als gereden"}
+          </Button>
           {route.origin === "community" && (
             <Button
               variant={route.my_upvote ? "filled" : "light"}

@@ -17,14 +17,16 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import current_user
-from app.models import Event, EventParticipant, Route, User
+from app.models import Event, EventParticipant, Route, RouteOrigin, User
 from app.routers.routes import media_url
+from app.routes_common import slugify, unique_slug
 from app.schemas import (
     EventCreateIn,
     EventJoinIn,
     EventOut,
     EventParticipantOut,
     EventRouteRef,
+    EventRouteUploadIn,
     EventUpdateIn,
     Message,
     UserSummary,
@@ -106,6 +108,33 @@ def _resolve_route(db: Session, route_id: int | None) -> Route | None:
     return route
 
 
+def _create_event_route(
+    db: Session, upload: EventRouteUploadIn, user: User
+) -> Route:
+    """Maakt een verborgen route (`origin=event`) uit een geüploade GPX."""
+    route = Route(
+        slug=unique_slug(db, slugify(upload.name)),
+        name=upload.name.strip(),
+        distance_km=upload.distance_km,
+        elevation_m=upload.elevation_m,
+        coordinates=upload.coordinates,
+        origin=RouteOrigin.event,
+        created_by_id=user.id,
+    )
+    db.add(route)
+    db.flush()
+    return route
+
+
+def _drop_event_route(db: Session, route_id: int | None) -> None:
+    """Ruimt een event-eigen route op zodra het event 'm niet meer gebruikt."""
+    if route_id is None:
+        return
+    route = db.get(Route, route_id)
+    if route is not None and route.origin == RouteOrigin.event:
+        db.delete(route)
+
+
 @router.get("", response_model=list[EventOut])
 def list_events(
     include_past: bool = Query(default=False),
@@ -139,7 +168,8 @@ def create_event(
             detail="Een event in het verleden plannen kan niet.",
         )
     route = _resolve_route(db, payload.route_id)
-
+    if route is None and payload.route_upload is not None:
+        route = _create_event_route(db, payload.route_upload, user)
     event = Event(
         name=payload.name.strip(),
         event_type=payload.event_type,
@@ -181,9 +211,15 @@ def update_event(
         )
 
     data = payload.model_dump(exclude_unset=True)
-    if "route_id" in data:
-        route = _resolve_route(db, data.pop("route_id"))
+    upload = data.pop("route_upload", None)
+    if "route_id" in data or upload is not None:
+        route = _resolve_route(db, data.pop("route_id", None))
+        if route is None and upload is not None:
+            route = _create_event_route(db, EventRouteUploadIn(**upload), user)
+        previous = event.route_id
         event.route_id = route.id if route else None
+        if previous != event.route_id:
+            _drop_event_route(db, previous)
     if "max_participants" in data and data["max_participants"] is not None:
         if data["max_participants"] < len(event.participants):
             raise HTTPException(
@@ -209,7 +245,10 @@ def delete_event(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Alleen de aanmaker of een beheerder kan dit event verwijderen.",
         )
+    route_id = event.route_id
     db.delete(event)
+    db.flush()
+    _drop_event_route(db, route_id)
     db.commit()
     return Message(detail="Het event is verwijderd.")
 

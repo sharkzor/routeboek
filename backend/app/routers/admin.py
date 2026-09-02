@@ -209,6 +209,9 @@ def list_all_routes(
     _: User = Depends(current_admin),
 ) -> list[RouteSummary]:
     stmt = select(Route).order_by(Route.name.asc())
+    # Event-eigen routes zijn een implementatiedetail van één event en horen
+    # niet als losse regel in het routebeheer thuis.
+    stmt = stmt.where(Route.origin != RouteOrigin.event)
     if not include_inactive:
         stmt = stmt.where(Route.is_active.is_(True))
     if search:

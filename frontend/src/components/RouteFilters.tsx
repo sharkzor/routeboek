@@ -30,6 +30,8 @@ export const EMPTY_FILTERS: RouteFilterState = {
   routeType: null,
   minRating: null,
   categories: [],
+  favorite: null,
+  ridden: null,
   sort: "name",
 };
 
@@ -45,7 +47,9 @@ export function hasActiveFilters(filters: RouteFilterState): boolean {
     filters.wind.length > 0 ||
     filters.routeType !== null ||
     filters.minRating !== null ||
-    filters.categories.length > 0
+    filters.categories.length > 0 ||
+    filters.favorite !== null ||
+    filters.ridden !== null
   );
 }
 
@@ -119,6 +123,34 @@ export default function RouteFilters({
               onChange={(km) => patch({ kmMax: km === "" ? null : Number(km) })}
             />
           </Stack>
+        </Stack>
+
+        <Divider />
+
+        <Stack gap={8}>
+          <Text size="sm" fw={600}>
+            Persoonlijk
+          </Text>
+          <Checkbox
+            color="routeboek"
+            label="Alleen mijn favorieten"
+            checked={value.favorite === true}
+            onChange={(event) =>
+              patch({ favorite: event.currentTarget.checked ? true : null })
+            }
+          />
+          <Radio.Group
+            value={value.ridden === null ? "" : value.ridden ? "yes" : "no"}
+            onChange={(choice) =>
+              patch({ ridden: choice === "" ? null : choice === "yes" })
+            }
+          >
+            <Stack gap={6}>
+              <Radio value="" label="Gereden en ongereden" color="routeboek" />
+              <Radio value="yes" label="Alleen al gereden" color="routeboek" />
+              <Radio value="no" label="Nog niet gereden" color="routeboek" />
+            </Stack>
+          </Radio.Group>
         </Stack>
 
         <Divider />

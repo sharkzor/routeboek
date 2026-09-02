@@ -20,6 +20,7 @@ import { IconFilter, IconMoodEmpty } from "@tabler/icons-react";
 import RouteCard from "../components/RouteCard";
 import RouteFilters, { EMPTY_FILTERS, hasActiveFilters } from "../components/RouteFilters";
 import { ApiError, api } from "../api/client";
+import { routeMarkHandlers } from "../api/marks";
 import type { RouteFilterState, RoutePage } from "../api/types";
 
 const PAGE_SIZE = 24;
@@ -42,6 +43,7 @@ export default function RoutesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [drawerOpened, drawer] = useDisclosure(false);
+  const marks = useMemo(() => routeMarkHandlers(setData), []);
   const isMobile = useMediaQuery("(max-width: 62em)");
 
   useEffect(() => {
@@ -161,7 +163,12 @@ export default function RoutesPage() {
             <Stack gap="lg" opacity={loading ? 0.6 : 1}>
               <SimpleGrid cols={{ base: 1, xs: 2, md: 2, lg: 3, xl: 4 }} spacing="md">
                 {data?.items.map((route) => (
-                  <RouteCard key={route.id} route={route} />
+                  <RouteCard
+                    key={route.id}
+                    route={route}
+                    onToggleFavorite={marks.onToggleFavorite}
+                    onToggleRidden={marks.onToggleRidden}
+                  />
                 ))}
               </SimpleGrid>
 

@@ -17,6 +17,7 @@ import type {
   RideInput,
   RideWeather,
   RouteDetail,
+  MarkResult,
   RouteFilterState,
   RouteImportPreview,
   RoutePage,
@@ -135,12 +136,19 @@ const ALL_ROUTES_FILTERS: RouteFilterState = {
   routeType: null,
   minRating: null,
   categories: [],
+  favorite: null,
+  ridden: null,
   sort: "name",
 };
 
-function routesRequest(filters: RouteFilterState, page: number, pageSize: number) {
+function routesRequest(
+  path: string,
+  filters: RouteFilterState,
+  page: number,
+  pageSize: number,
+) {
   return request<RoutePage>(
-    "/api/routes" +
+    path +
       query({
         search: filters.search,
         km_min: filters.kmMin,
@@ -149,6 +157,8 @@ function routesRequest(filters: RouteFilterState, page: number, pageSize: number
         route_type: filters.routeType,
         min_rating: filters.minRating,
         category: filters.categories,
+        favorite: filters.favorite,
+        ridden: filters.ridden,
         sort: filters.sort,
         page,
         page_size: pageSize,
@@ -156,11 +166,27 @@ function routesRequest(filters: RouteFilterState, page: number, pageSize: number
   );
 }
 
+/** Alle community-routes ophalen, voor keuzevelden. */
+async function fetchAllCommunityRoutes(): Promise<RouteSummary[]> {
+  const items: RouteSummary[] = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const chunk = await routesRequest(
+      "/api/community/routes",
+      { ...ALL_ROUTES_FILTERS, sort: "name" },
+      page,
+      100,
+    );
+    items.push(...chunk.items);
+    if (chunk.items.length === 0 || items.length >= chunk.total) break;
+  }
+  return items;
+}
+
 /** Alle actieve routes ophalen; de API geeft maximaal 100 per pagina. */
 async function fetchAllRoutes(): Promise<RouteSummary[]> {
   const items: RouteSummary[] = [];
   for (let page = 1; page <= 20; page += 1) {
-    const chunk = await routesRequest(ALL_ROUTES_FILTERS, page, 100);
+    const chunk = await routesRequest("/api/routes", ALL_ROUTES_FILTERS, page, 100);
     items.push(...chunk.items);
     if (chunk.items.length === 0 || items.length >= chunk.total) break;
   }
@@ -203,7 +229,7 @@ export const api = {
 
   // ---------------------------------------------------------------- routes
   routes: (filters: RouteFilterState, page: number, pageSize: number) =>
-    routesRequest(filters, page, pageSize),
+    routesRequest("/api/routes", filters, page, pageSize),
   route: (id: number) => request<RouteDetail>(`/api/routes/${id}`),
 
   /** Alle actieve routes ophalen; de API geeft maximaal 100 per pagina. */
@@ -213,14 +239,14 @@ export const api = {
   allRoutesForRideForm: async (): Promise<RouteSummary[]> => {
     const [official, community] = await Promise.all([
       fetchAllRoutes(),
-      request<RouteSummary[]>("/api/community/routes" + query({ sort: "name" })),
+      fetchAllCommunityRoutes(),
     ]);
     return [...official, ...community];
   },
 
   // ------------------------------------------------------- community routes
-  communityRoutes: (search?: string, sort: string = "upvotes") =>
-    request<RouteSummary[]>("/api/community/routes" + query({ search, sort })),
+  communityRoutes: (filters: RouteFilterState, page: number, pageSize: number) =>
+    routesRequest("/api/community/routes", filters, page, pageSize),
   importCommunityRouteGpx: (file: File) => {
     const form = new FormData();
     form.append("gpx", file);
@@ -237,6 +263,16 @@ export const api = {
     request<UpvoteResult>(`/api/community/routes/${routeId}/upvote`, { method: "DELETE" }),
   deleteCommunityRoute: (routeId: number) =>
     request<{ detail: string }>(`/api/community/routes/${routeId}`, { method: "DELETE" }),
+
+  // -------------------------------------------- favorieten / gereden routes
+  setFavorite: (routeId: number, on: boolean) =>
+    request<MarkResult>(`/api/routes/${routeId}/favorite`, {
+      method: on ? "POST" : "DELETE",
+    }),
+  setRidden: (routeId: number, on: boolean) =>
+    request<MarkResult>(`/api/routes/${routeId}/ridden`, {
+      method: on ? "POST" : "DELETE",
+    }),
 
   // ---------------------------------------------------------------- ritten
   members: () => request<UserSummary[]>("/api/users"),
