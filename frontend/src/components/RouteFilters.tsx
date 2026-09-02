@@ -32,7 +32,7 @@ export const EMPTY_FILTERS: RouteFilterState = {
   categories: [],
   favorite: null,
   ridden: null,
-  sort: "name",
+  sort: "distance_asc",
 };
 
 const WIND_ORDER: WindCode[] = ["N", "O", "Z", "W"];

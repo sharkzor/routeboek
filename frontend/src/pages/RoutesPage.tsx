@@ -119,7 +119,7 @@ export default function RoutesPage() {
           <Select
             data={SORT_OPTIONS}
             value={filters.sort}
-            onChange={(sort) => setFilters({ ...filters, sort: sort ?? "name" })}
+            onChange={(sort) => setFilters({ ...filters, sort: sort ?? "distance_asc" })}
             allowDeselect={false}
             w={230}
             aria-label="Sorteren"
