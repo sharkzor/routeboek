@@ -382,12 +382,26 @@ oude routeboek.cc (`weer.png`).
 - Geen weerbericht op de Events-pagina (nog) — expliciet buiten scope
   gehouden omdat daar is gevraagd, alleen ritten.
 
+### Rit-detailpagina
+Elke rit heeft een eigen pagina (`/ritten/{id}`, `RideDetailPage.tsx`) naast
+de compacte kaart in het overzicht (`RidesPage.tsx`). De ritnaam in het
+overzicht is een link hierheen; de mediabanner blijft naar de route linken
+(`/routes/{id}`) zodat beide ingangen bewaard blijven. De detailpagina toont
+alles wat in het overzicht is ingeklapt meteen volledig uitgeklapt: de volle
+deelnemerslijst (geen "Wie gaan er mee?"-toggle), het weerbericht (automatisch
+opgehaald zodra de rit daarvoor in aanmerking komt, geen los uitklapknopje)
+en de volledige opmerkingen zonder `lineClamp`. De kaart staat als volle
+banner bovenaan (`.rb-ride-detail-media`, groter dan de `.rb-ride-media` in
+het overzicht) met hetzelfde scheurkalender-datumblok (`.rb-ride-date--lg`).
+Backend hergebruikt gewoon het bestaande `GET /api/rides/{id}`; er was geen
+nieuw endpoint nodig.
+
 ### Rit delen (WhatsApp/Telegram)
-Elke rit in `RidesPage.tsx` heeft een deel-knop (`IconShare2`, naast het
-"..."-menu, voor iedereen zichtbaar, niet alleen `can_edit`) die een
-kant-en-klaar tekstbericht naar het klembord kopieert — naar het formaat van
-het oude routeboek.cc (naam, wegkapitein, datum, tijd, kerngegevens, optioneel
-weer en opmerkingen, routelink onderaan):
+Elke rit (zowel in `RidesPage.tsx` als op `RideDetailPage.tsx`) heeft een
+deel-knop (`IconShare2`, naast het "..."-menu, voor iedereen zichtbaar, niet
+alleen `can_edit`) die een kant-en-klaar tekstbericht naar het klembord
+kopieert — naar het formaat van het oude routeboek.cc (naam, wegkapitein,
+datum, tijd, kerngegevens, optioneel weer en opmerkingen, ritlink onderaan):
 
 ```
 {ritnaam}
@@ -401,30 +415,30 @@ weer en opmerkingen, routelink onderaan):
 ☁️ {weeromschrijving}, {temp}° · {windrichting} {bft} Bft
 💬 {opmerkingen}
 
-📈 {link naar de rit zelf}
+📈 {link naar de rit-detailpagina}
 ```
 
-- `buildShareText()` en `nearestWeatherHour()` in `RidesPage.tsx` bouwen dit
-  bericht. Regels zonder data (geen afstand, geen route, lege opmerkingen)
-  worden overgeslagen — geen "null km" of lege regels in het bericht.
-- **Weer wordt on-demand opgehaald**, niet pas als het weerbericht al is
-  uitgeklapt: de deelknop hergebruikt `weatherByRide`-cache als die er al is,
-  en roept anders zelf `api.rideWeather()` aan. `nearestWeatherHour()` kiest
-  het uur uit de 4-uurs window dat het dichtst bij het vertrektijdstip ligt.
-  `weatherLabel()` (nieuw, geëxporteerd vanuit `WeatherStrip.tsx`) vertaalt de
-  WMO-weercode naar een korte Nederlandse tekst ("Bewolkt", "Motregen", …) —
-  dezelfde codegroepen als het icoon, maar als tekst i.p.v. icoon+kleur; hou
-  deze twee mappings in sync als er ooit weercodes bijkomen.
-- De link is de **rit zelf** (`/ritten#rit-{id}`), niet de route: wie de link
-  opent moet meteen kunnen zien wie er meegaan en zich kunnen aan-/afmelden,
-  niet alleen de routekaart. Er is bewust geen aparte rit-detailpagina
-  gebouwd — `RidesPage.tsx` zet bij het laden de scope op "Alle (incl.
-  verleden)" zodra de hash `#rit-<id>` aanwezig is (zo blijft een verleden of
-  andermans rit ook vindbaar; `visible_rides_query` op de backend regelt
-  privé-zichtbaarheid), scrollt de bijbehorende kaart in beeld en geeft 'm
-  2,5s een rode gloed (`.rb-ride-card--highlight` in `styles.css`) zodat
-  duidelijk is welke rit bedoeld werd. Deze regel wordt altijd toegevoegd,
-  ook zonder gekoppelde route.
+- `buildShareText()` en `nearestWeatherHour()` staan in het gedeelde
+  `pages/ridesShare.ts` (samen met `formatRideMoment()`, `shareText()` en
+  `isWeatherEligible()`/`FORECAST_HORIZON_DAYS`), zodat zowel `RidesPage.tsx`
+  als `RideDetailPage.tsx` exact hetzelfde bericht opbouwen zonder
+  duplicatie. Regels zonder data (geen afstand, geen route, lege
+  opmerkingen) worden overgeslagen — geen "null km" of lege regels in het
+  bericht.
+- **Weer wordt on-demand opgehaald** in het overzicht (niet pas als het
+  weerbericht al is uitgeklapt): de deelknop hergebruikt `weatherByRide`-cache
+  als die er al is, en roept anders zelf `api.rideWeather()` aan. Op de
+  detailpagina is het weer sowieso altijd al opgehaald (geen uitklapknop
+  daar). `nearestWeatherHour()` kiest het uur uit de 4-uurs window dat het
+  dichtst bij het vertrektijdstip ligt. `weatherLabel()` (geëxporteerd vanuit
+  `WeatherStrip.tsx`) vertaalt de WMO-weercode naar een korte Nederlandse
+  tekst ("Bewolkt", "Motregen", …) — dezelfde codegroepen als het icoon, maar
+  als tekst i.p.v. icoon+kleur; hou deze twee mappings in sync als er ooit
+  weercodes bijkomen.
+- De link is de **rit-detailpagina** (`/ritten/{id}`), niet de route: wie de
+  link opent moet meteen kunnen zien wie er meegaan en zich kunnen
+  aan-/afmelden, niet alleen de routekaart. Deze regel wordt altijd
+  toegevoegd, ook zonder gekoppelde route.
 - Kopiëren gebeurt via de Clipboard API (`navigator.clipboard.writeText`),
   met een `execCommand("copy")`-fallback via een verborgen `<textarea>` voor
   browsers/omgevingen zonder Clipboard API-toegang.

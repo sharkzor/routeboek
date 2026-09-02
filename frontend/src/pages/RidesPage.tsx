@@ -45,66 +45,17 @@ import { Link, useNavigate } from "react-router";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { RIDE_TYPE_LABELS, type Ride, type WeatherHour } from "../api/types";
-import { WeatherStrip, weatherLabel } from "../components/WeatherStrip";
+import { WeatherStrip } from "../components/WeatherStrip";
+import {
+  buildShareText,
+  formatRideMoment,
+  isWeatherEligible,
+  shareText,
+} from "./ridesShare";
 
 dayjs.locale("nl");
 
 type Scope = "upcoming" | "mine" | "past";
-
-export function formatRideMoment(ride: Ride): string {
-  const day = dayjs(ride.ride_date);
-  // Het jaartal alleen tonen als de rit niet in het huidige jaar valt; dat
-  // scheelt op mobiel net genoeg ruimte om op één regel te passen.
-  const pattern =
-    day.year() === dayjs().year() ? "dddd D MMMM" : "dddd D MMMM YYYY";
-  return `${day.format(pattern)} · ${ride.ride_time.slice(0, 5)}`;
-}
-
-const FORECAST_HORIZON_DAYS = 15;
-
-/** Zoekt het weeruur dat het dichtst bij het vertrektijdstip van de rit ligt. */
-function nearestWeatherHour(
-  ride: Ride,
-  hours: WeatherHour[] | null,
-): WeatherHour | null {
-  if (!hours || hours.length === 0) return null;
-  const target = dayjs(`${ride.ride_date}T${ride.ride_time.slice(0, 5)}`);
-  return hours.reduce((closest, hour) => {
-    const diff = Math.abs(dayjs(hour.time).diff(target));
-    const closestDiff = Math.abs(dayjs(closest.time).diff(target));
-    return diff < closestDiff ? hour : closest;
-  }, hours[0]);
-}
-
-/** Bouwt de deeltekst voor WhatsApp/Telegram, naar het formaat van het oude
- *  routeboek.cc (naam, wegkapitein, datum/tijd, kerngegevens, weer en
- *  opmerkingen, met de routelink onderaan). */
-function buildShareText(ride: Ride, weatherHour: WeatherHour | null): string {
-  const lines: string[] = [ride.name, `🚴 ${ride.owner.display_name}`];
-  lines.push(`📅 ${dayjs(ride.ride_date).format("dddd D MMMM")}`);
-  lines.push(`⏰ ${ride.ride_time.slice(0, 5)}`);
-  if (ride.distance_km !== null) {
-    lines.push(
-      `🏁 ${ride.distance_km.toLocaleString("nl-NL", { maximumFractionDigits: 1 })} km`,
-    );
-  }
-  if (ride.speed_kmh !== null) {
-    lines.push(`🐢 ${ride.speed_kmh.toFixed(0)} km/u`);
-  }
-  lines.push(`🚴‍ Max. ${ride.max_participants}`);
-  lines.push(`🚲 ${RIDE_TYPE_LABELS[ride.ride_type]}`);
-  if (weatherHour) {
-    lines.push(
-      `☁️ ${weatherLabel(weatherHour.weather_code, weatherHour.is_day)}, ${Math.round(weatherHour.temp_c)}° · ${weatherHour.wind_compass} ${weatherHour.wind_beaufort} Bft`,
-    );
-  }
-  if (ride.notes_html.trim()) {
-    lines.push(`💬 ${ride.notes_html.trim()}`);
-  }
-  lines.push("");
-  lines.push(`📈 ${window.location.origin}/ritten#rit-${ride.id}`);
-  return lines.join("\n");
-}
 
 export default function RidesPage() {
   const { user } = useAuth();
@@ -121,7 +72,6 @@ export default function RidesPage() {
     Record<number, { loading: boolean; hours: WeatherHour[] | null }>
   >({});
   const [sharing, setSharing] = useState<Set<number>>(new Set());
-  const [highlighted, setHighlighted] = useState<number | null>(null);
 
   const toggleExpanded = (rideId: number) => {
     setExpanded((prev) => {
@@ -169,38 +119,21 @@ export default function RidesPage() {
     if (sharing.has(ride.id)) return;
     setSharing((prev) => new Set(prev).add(ride.id));
     try {
-      let weatherHour: WeatherHour | null = null;
-      const past = dayjs(ride.ride_date).isBefore(dayjs().startOf("day"));
-      const withinHorizon =
-        dayjs(ride.ride_date).diff(dayjs().startOf("day"), "day") <=
-        FORECAST_HORIZON_DAYS;
-      if (ride.route && !past && withinHorizon) {
+      let hours: WeatherHour[] | null = null;
+      if (isWeatherEligible(ride)) {
         // Hergebruik de cache van het uitgeklapte weerbericht; anders alsnog
         // ophalen zodat delen ook werkt zonder dat je 'm eerst hebt bekeken.
         const cached = weatherByRide[ride.id]?.hours;
-        const hours =
+        hours =
           cached !== undefined
             ? cached
             : await api
                 .rideWeather(ride.id)
                 .then((result) => (result.available ? result.hours : null))
                 .catch(() => null);
-        weatherHour = nearestWeatherHour(ride, hours);
       }
-      const text = buildShareText(ride, weatherHour);
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        // Fallback voor browsers zonder Clipboard API (of buiten https).
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
+      const text = buildShareText(ride, hours);
+      await shareText(text);
       notifications.show({
         message: "Rit gekopieerd naar klembord — plak 'm in WhatsApp of Telegram.",
         color: "green",
@@ -232,27 +165,6 @@ export default function RidesPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  // Een gedeelde rit-link (#rit-<id>) moet vindbaar zijn ongeacht scope: zet
-  // daarom bij binnenkomst het brede "Alle"-bereik zodat ook een verleden of
-  // andermans rit meekomt (visible_rides_query regelt privé-zichtbaarheid).
-  useEffect(() => {
-    const match = window.location.hash.match(/^#rit-(\d+)$/);
-    if (match) setScope("past");
-  }, []);
-
-  useEffect(() => {
-    const match = window.location.hash.match(/^#rit-(\d+)$/);
-    if (!match || rides === null) return;
-    const rideId = Number(match[1]);
-    const el = document.getElementById(`rit-${rideId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlighted(rideId);
-      const timeout = setTimeout(() => setHighlighted(null), 2500);
-      return () => clearTimeout(timeout);
-    }
-  }, [rides]);
 
   const mutate = async (action: () => Promise<Ride>, message: string) => {
     try {
@@ -350,22 +262,9 @@ export default function RidesPage() {
           {rides.map((ride) => {
             const full = ride.participant_count >= ride.max_participants;
             const past = dayjs(ride.ride_date).isBefore(dayjs().startOf("day"));
-            const weatherEligible =
-              !past &&
-              ride.route !== null &&
-              dayjs(ride.ride_date).diff(dayjs().startOf("day"), "day") <=
-                FORECAST_HORIZON_DAYS;
+            const weatherEligible = isWeatherEligible(ride);
             return (
-              <Card
-                key={ride.id}
-                id={`rit-${ride.id}`}
-                withBorder
-                radius="md"
-                p={0}
-                className={
-                  highlighted === ride.id ? "rb-ride-card--highlight" : undefined
-                }
-              >
+              <Card key={ride.id} withBorder radius="md" p={0}>
                 <div
                   className={
                     "rb-ride-card" + (ride.route ? " rb-ride-card--media" : "")
@@ -409,7 +308,15 @@ export default function RidesPage() {
                       gap="xs"
                     >
                       <Stack gap={4} style={{ minWidth: 0, flex: 1 }}>
-                        <Text fw={700} fz="lg" lineClamp={2}>
+                        <Text
+                          fw={700}
+                          fz="lg"
+                          lineClamp={2}
+                          component={Link}
+                          to={`/ritten/${ride.id}`}
+                          c="inherit"
+                          td="none"
+                        >
                           {ride.name}
                         </Text>
                         <Group gap={6} wrap="wrap">

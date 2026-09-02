@@ -94,21 +94,6 @@ body {
   }
 }
 
-/* Tijdelijke gloed rond een rit waarnaar via een gedeelde link (#rit-<id>)
-   is genavigeerd, zodat duidelijk is welke kaart bedoeld werd. */
-.rb-ride-card--highlight {
-  animation: rb-ride-highlight 2.5s ease-out;
-}
-
-@keyframes rb-ride-highlight {
-  0% {
-    box-shadow: 0 0 0 3px var(--mantine-color-routeboek-5);
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-}
-
 .rb-ride-media {
   position: relative;
   background: #e8eef2;
@@ -208,6 +193,70 @@ body {
 
 .rb-ride-facts > * {
   min-width: 0;
+}
+
+/* ------------------------------------------------------- rit-detailpagina
+   Hier is er geen lijstcontext meer, dus mag de kaart een volle banner
+   bovenaan zijn met wat meer ademruimte dan de compacte overzichtskaart. */
+.rb-ride-detail-media {
+  position: relative;
+  background: #e8eef2;
+  overflow: hidden;
+  border-top-left-radius: var(--mantine-radius-md);
+  border-top-right-radius: var(--mantine-radius-md);
+}
+
+.rb-ride-detail-media img {
+  display: block;
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+}
+
+@media (min-width: 48em) {
+  .rb-ride-detail-media img {
+    height: 340px;
+  }
+}
+
+.rb-ride-date--lg {
+  top: 16px;
+  left: 16px;
+  width: 68px;
+}
+
+.rb-ride-date--lg .rb-ride-date__month {
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.rb-ride-date--lg .rb-ride-date__day {
+  font-size: 26px;
+}
+
+.rb-ride-date--lg .rb-ride-date__time {
+  font-size: 14px;
+}
+
+/* Zelfde tweekoloms-op-mobiel/doorlopende-rij-op-desktop patroon als de
+   overzichtskaart, maar met wat meer ruimte omdat de detailpagina breder
+   uitademt. */
+.rb-ride-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.rb-ride-detail-facts > * {
+  min-width: 0;
+}
+
+@media (min-width: 48em) {
+  .rb-ride-detail-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+  }
 }
 
 /* Beschrijvingen komen als HTML uit het oude routeboek. */

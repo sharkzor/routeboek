@@ -23,6 +23,7 @@ import VerifyPage from "./pages/VerifyPage";
 import RoutesPage from "./pages/RoutesPage";
 import RouteDetailPage from "./pages/RouteDetailPage";
 import RidesPage from "./pages/RidesPage";
+import RideDetailPage from "./pages/RideDetailPage";
 import RideFormPage from "./pages/RideFormPage";
 import EventsPage from "./pages/EventsPage";
 import EventFormPage from "./pages/EventFormPage";
@@ -61,6 +62,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/ritten" element={<RidesPage />} />
                 <Route path="/ritten/nieuw" element={<RideFormPage />} />
                 <Route path="/ritten/:rideId/bewerken" element={<RideFormPage />} />
+                <Route path="/ritten/:rideId" element={<RideDetailPage />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/events/nieuw" element={<EventFormPage />} />
                 <Route path="/events/:eventId/bewerken" element={<EventFormPage />} />
