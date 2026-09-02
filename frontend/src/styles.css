@@ -94,6 +94,21 @@ body {
   }
 }
 
+/* Tijdelijke gloed rond een rit waarnaar via een gedeelde link (#rit-<id>)
+   is genavigeerd, zodat duidelijk is welke kaart bedoeld werd. */
+.rb-ride-card--highlight {
+  animation: rb-ride-highlight 2.5s ease-out;
+}
+
+@keyframes rb-ride-highlight {
+  0% {
+    box-shadow: 0 0 0 3px var(--mantine-color-routeboek-5);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
 .rb-ride-media {
   position: relative;
   background: #e8eef2;

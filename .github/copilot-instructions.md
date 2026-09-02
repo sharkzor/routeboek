@@ -401,7 +401,7 @@ weer en opmerkingen, routelink onderaan):
 ☁️ {weeromschrijving}, {temp}° · {windrichting} {bft} Bft
 💬 {opmerkingen}
 
-📈 {link naar de gekoppelde route}
+📈 {link naar de rit zelf}
 ```
 
 - `buildShareText()` en `nearestWeatherHour()` in `RidesPage.tsx` bouwen dit
@@ -415,10 +415,16 @@ weer en opmerkingen, routelink onderaan):
   WMO-weercode naar een korte Nederlandse tekst ("Bewolkt", "Motregen", …) —
   dezelfde codegroepen als het icoon, maar als tekst i.p.v. icoon+kleur; hou
   deze twee mappings in sync als er ooit weercodes bijkomen.
-- De link is de **routelink in onze eigen app** (`/routes/{id}`), niet een
-  publieke short-link zoals `routeboek.cc/r/...` — de app is niet publiek
-  toegankelijk zonder account, dus een publieke short-link heeft hier geen zin.
-  Zonder gekoppelde route wordt de linkregel simpelweg weggelaten.
+- De link is de **rit zelf** (`/ritten#rit-{id}`), niet de route: wie de link
+  opent moet meteen kunnen zien wie er meegaan en zich kunnen aan-/afmelden,
+  niet alleen de routekaart. Er is bewust geen aparte rit-detailpagina
+  gebouwd — `RidesPage.tsx` zet bij het laden de scope op "Alle (incl.
+  verleden)" zodra de hash `#rit-<id>` aanwezig is (zo blijft een verleden of
+  andermans rit ook vindbaar; `visible_rides_query` op de backend regelt
+  privé-zichtbaarheid), scrollt de bijbehorende kaart in beeld en geeft 'm
+  2,5s een rode gloed (`.rb-ride-card--highlight` in `styles.css`) zodat
+  duidelijk is welke rit bedoeld werd. Deze regel wordt altijd toegevoegd,
+  ook zonder gekoppelde route.
 - Kopiëren gebeurt via de Clipboard API (`navigator.clipboard.writeText`),
   met een `execCommand("copy")`-fallback via een verborgen `<textarea>` voor
   browsers/omgevingen zonder Clipboard API-toegang.

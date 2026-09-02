@@ -101,10 +101,8 @@ function buildShareText(ride: Ride, weatherHour: WeatherHour | null): string {
   if (ride.notes_html.trim()) {
     lines.push(`💬 ${ride.notes_html.trim()}`);
   }
-  if (ride.route) {
-    lines.push("");
-    lines.push(`📈 ${window.location.origin}/routes/${ride.route.id}`);
-  }
+  lines.push("");
+  lines.push(`📈 ${window.location.origin}/ritten#rit-${ride.id}`);
   return lines.join("\n");
 }
 
@@ -123,6 +121,7 @@ export default function RidesPage() {
     Record<number, { loading: boolean; hours: WeatherHour[] | null }>
   >({});
   const [sharing, setSharing] = useState<Set<number>>(new Set());
+  const [highlighted, setHighlighted] = useState<number | null>(null);
 
   const toggleExpanded = (rideId: number) => {
     setExpanded((prev) => {
@@ -234,6 +233,27 @@ export default function RidesPage() {
     void load();
   }, [load]);
 
+  // Een gedeelde rit-link (#rit-<id>) moet vindbaar zijn ongeacht scope: zet
+  // daarom bij binnenkomst het brede "Alle"-bereik zodat ook een verleden of
+  // andermans rit meekomt (visible_rides_query regelt privé-zichtbaarheid).
+  useEffect(() => {
+    const match = window.location.hash.match(/^#rit-(\d+)$/);
+    if (match) setScope("past");
+  }, []);
+
+  useEffect(() => {
+    const match = window.location.hash.match(/^#rit-(\d+)$/);
+    if (!match || rides === null) return;
+    const rideId = Number(match[1]);
+    const el = document.getElementById(`rit-${rideId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlighted(rideId);
+      const timeout = setTimeout(() => setHighlighted(null), 2500);
+      return () => clearTimeout(timeout);
+    }
+  }, [rides]);
+
   const mutate = async (action: () => Promise<Ride>, message: string) => {
     try {
       const updated = await action();
@@ -336,7 +356,16 @@ export default function RidesPage() {
               dayjs(ride.ride_date).diff(dayjs().startOf("day"), "day") <=
                 FORECAST_HORIZON_DAYS;
             return (
-              <Card key={ride.id} withBorder radius="md" p={0}>
+              <Card
+                key={ride.id}
+                id={`rit-${ride.id}`}
+                withBorder
+                radius="md"
+                p={0}
+                className={
+                  highlighted === ride.id ? "rb-ride-card--highlight" : undefined
+                }
+              >
                 <div
                   className={
                     "rb-ride-card" + (ride.route ? " rb-ride-card--media" : "")
