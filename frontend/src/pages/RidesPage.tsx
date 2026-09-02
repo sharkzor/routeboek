@@ -33,6 +33,7 @@ import {
   IconMapPin,
   IconPencil,
   IconRoute,
+  IconShare2,
   IconTrash,
   IconUser,
   IconUsers,
@@ -44,7 +45,7 @@ import { Link, useNavigate } from "react-router";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { RIDE_TYPE_LABELS, type Ride, type WeatherHour } from "../api/types";
-import { WeatherStrip } from "../components/WeatherStrip";
+import { WeatherStrip, weatherLabel } from "../components/WeatherStrip";
 
 dayjs.locale("nl");
 
@@ -61,6 +62,52 @@ export function formatRideMoment(ride: Ride): string {
 
 const FORECAST_HORIZON_DAYS = 15;
 
+/** Zoekt het weeruur dat het dichtst bij het vertrektijdstip van de rit ligt. */
+function nearestWeatherHour(
+  ride: Ride,
+  hours: WeatherHour[] | null,
+): WeatherHour | null {
+  if (!hours || hours.length === 0) return null;
+  const target = dayjs(`${ride.ride_date}T${ride.ride_time.slice(0, 5)}`);
+  return hours.reduce((closest, hour) => {
+    const diff = Math.abs(dayjs(hour.time).diff(target));
+    const closestDiff = Math.abs(dayjs(closest.time).diff(target));
+    return diff < closestDiff ? hour : closest;
+  }, hours[0]);
+}
+
+/** Bouwt de deeltekst voor WhatsApp/Telegram, naar het formaat van het oude
+ *  routeboek.cc (naam, wegkapitein, datum/tijd, kerngegevens, weer en
+ *  opmerkingen, met de routelink onderaan). */
+function buildShareText(ride: Ride, weatherHour: WeatherHour | null): string {
+  const lines: string[] = [ride.name, `🚴 ${ride.owner.display_name}`];
+  lines.push(`📅 ${dayjs(ride.ride_date).format("dddd D MMMM")}`);
+  lines.push(`⏰ ${ride.ride_time.slice(0, 5)}`);
+  if (ride.distance_km !== null) {
+    lines.push(
+      `🏁 ${ride.distance_km.toLocaleString("nl-NL", { maximumFractionDigits: 1 })} km`,
+    );
+  }
+  if (ride.speed_kmh !== null) {
+    lines.push(`🐢 ${ride.speed_kmh.toFixed(0)} km/u`);
+  }
+  lines.push(`🚴‍ Max. ${ride.max_participants}`);
+  lines.push(`🚲 ${RIDE_TYPE_LABELS[ride.ride_type]}`);
+  if (weatherHour) {
+    lines.push(
+      `☁️ ${weatherLabel(weatherHour.weather_code, weatherHour.is_day)}, ${Math.round(weatherHour.temp_c)}° · ${weatherHour.wind_compass} ${weatherHour.wind_beaufort} Bft`,
+    );
+  }
+  if (ride.notes_html.trim()) {
+    lines.push(`💬 ${ride.notes_html.trim()}`);
+  }
+  if (ride.route) {
+    lines.push("");
+    lines.push(`📈 ${window.location.origin}/routes/${ride.route.id}`);
+  }
+  return lines.join("\n");
+}
+
 export default function RidesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -75,6 +122,7 @@ export default function RidesPage() {
   const [weatherByRide, setWeatherByRide] = useState<
     Record<number, { loading: boolean; hours: WeatherHour[] | null }>
   >({});
+  const [sharing, setSharing] = useState<Set<number>>(new Set());
 
   const toggleExpanded = (rideId: number) => {
     setExpanded((prev) => {
@@ -116,6 +164,57 @@ export default function RidesPage() {
         );
       return { ...prev, [rideId]: { loading: true, hours: null } };
     });
+  };
+
+  const shareRide = async (ride: Ride) => {
+    if (sharing.has(ride.id)) return;
+    setSharing((prev) => new Set(prev).add(ride.id));
+    try {
+      let weatherHour: WeatherHour | null = null;
+      const past = dayjs(ride.ride_date).isBefore(dayjs().startOf("day"));
+      const withinHorizon =
+        dayjs(ride.ride_date).diff(dayjs().startOf("day"), "day") <=
+        FORECAST_HORIZON_DAYS;
+      if (ride.route && !past && withinHorizon) {
+        // Hergebruik de cache van het uitgeklapte weerbericht; anders alsnog
+        // ophalen zodat delen ook werkt zonder dat je 'm eerst hebt bekeken.
+        const cached = weatherByRide[ride.id]?.hours;
+        const hours =
+          cached !== undefined
+            ? cached
+            : await api
+                .rideWeather(ride.id)
+                .then((result) => (result.available ? result.hours : null))
+                .catch(() => null);
+        weatherHour = nearestWeatherHour(ride, hours);
+      }
+      const text = buildShareText(ride, weatherHour);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback voor browsers zonder Clipboard API (of buiten https).
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      notifications.show({
+        message: "Rit gekopieerd naar klembord — plak 'm in WhatsApp of Telegram.",
+        color: "green",
+      });
+    } catch {
+      notifications.show({ message: "Delen is mislukt.", color: "red" });
+    } finally {
+      setSharing((prev) => {
+        const next = new Set(prev);
+        next.delete(ride.id);
+        return next;
+      });
+    }
   };
 
   const load = useCallback(async () => {
@@ -306,37 +405,49 @@ export default function RidesPage() {
                         </Group>
                       </Stack>
 
-                      {ride.can_edit && (
-                        <Menu position="bottom-end" withinPortal>
-                          <Menu.Target>
-                            <ActionIcon
-                              variant="subtle"
-                              color="gray"
-                              aria-label="Meer acties"
-                              style={{ flexShrink: 0 }}
-                            >
-                              <IconDots size={18} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Item
-                              leftSection={<IconPencil size={16} />}
-                              onClick={() =>
-                                navigate(`/ritten/${ride.id}/bewerken`)
-                              }
-                            >
-                              Bewerken
-                            </Menu.Item>
-                            <Menu.Item
-                              color="red"
-                              leftSection={<IconTrash size={16} />}
-                              onClick={() => void remove(ride)}
-                            >
-                              Verwijderen
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
-                      )}
+                      <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+                        <Tooltip label="Delen via WhatsApp/Telegram">
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            aria-label="Rit delen"
+                            loading={sharing.has(ride.id)}
+                            onClick={() => void shareRide(ride)}
+                          >
+                            <IconShare2 size={18} />
+                          </ActionIcon>
+                        </Tooltip>
+                        {ride.can_edit && (
+                          <Menu position="bottom-end" withinPortal>
+                            <Menu.Target>
+                              <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                aria-label="Meer acties"
+                              >
+                                <IconDots size={18} />
+                              </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                              <Menu.Item
+                                leftSection={<IconPencil size={16} />}
+                                onClick={() =>
+                                  navigate(`/ritten/${ride.id}/bewerken`)
+                                }
+                              >
+                                Bewerken
+                              </Menu.Item>
+                              <Menu.Item
+                                color="red"
+                                leftSection={<IconTrash size={16} />}
+                                onClick={() => void remove(ride)}
+                              >
+                                Verwijderen
+                              </Menu.Item>
+                            </Menu.Dropdown>
+                          </Menu>
+                        )}
+                      </Group>
                     </Group>
 
                     <Group gap={6} wrap="nowrap">

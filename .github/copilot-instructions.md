@@ -382,6 +382,50 @@ oude routeboek.cc (`weer.png`).
 - Geen weerbericht op de Events-pagina (nog) — expliciet buiten scope
   gehouden omdat daar is gevraagd, alleen ritten.
 
+### Rit delen (WhatsApp/Telegram)
+Elke rit in `RidesPage.tsx` heeft een deel-knop (`IconShare2`, naast het
+"..."-menu, voor iedereen zichtbaar, niet alleen `can_edit`) die een
+kant-en-klaar tekstbericht naar het klembord kopieert — naar het formaat van
+het oude routeboek.cc (naam, wegkapitein, datum, tijd, kerngegevens, optioneel
+weer en opmerkingen, routelink onderaan):
+
+```
+{ritnaam}
+🚴 {wegkapitein}
+📅 {weekdag D maand}
+⏰ {tijd}
+🏁 {afstand} km
+🐢 {snelheid} km/u
+🚴‍ Max. {aantal}
+🚲 {type rit}
+☁️ {weeromschrijving}, {temp}° · {windrichting} {bft} Bft
+💬 {opmerkingen}
+
+📈 {link naar de gekoppelde route}
+```
+
+- `buildShareText()` en `nearestWeatherHour()` in `RidesPage.tsx` bouwen dit
+  bericht. Regels zonder data (geen afstand, geen route, lege opmerkingen)
+  worden overgeslagen — geen "null km" of lege regels in het bericht.
+- **Weer wordt on-demand opgehaald**, niet pas als het weerbericht al is
+  uitgeklapt: de deelknop hergebruikt `weatherByRide`-cache als die er al is,
+  en roept anders zelf `api.rideWeather()` aan. `nearestWeatherHour()` kiest
+  het uur uit de 4-uurs window dat het dichtst bij het vertrektijdstip ligt.
+  `weatherLabel()` (nieuw, geëxporteerd vanuit `WeatherStrip.tsx`) vertaalt de
+  WMO-weercode naar een korte Nederlandse tekst ("Bewolkt", "Motregen", …) —
+  dezelfde codegroepen als het icoon, maar als tekst i.p.v. icoon+kleur; hou
+  deze twee mappings in sync als er ooit weercodes bijkomen.
+- De link is de **routelink in onze eigen app** (`/routes/{id}`), niet een
+  publieke short-link zoals `routeboek.cc/r/...` — de app is niet publiek
+  toegankelijk zonder account, dus een publieke short-link heeft hier geen zin.
+  Zonder gekoppelde route wordt de linkregel simpelweg weggelaten.
+- Kopiëren gebeurt via de Clipboard API (`navigator.clipboard.writeText`),
+  met een `execCommand("copy")`-fallback via een verborgen `<textarea>` voor
+  browsers/omgevingen zonder Clipboard API-toegang.
+- **Nog geen eigen Telegram-integratie** — dit is bewust alleen de
+  klembord-stap; een bot die dit bericht automatisch in een kanaal post is
+  toekomstwerk (zie §11).
+
 ### Kaartminiaturen zonder eigen kaartbestand
 Alleen de 166 gescrapete officiële routes hebben een eigen `Route.map_file`
 (een gekopieerde afbeelding van routeboek.cc). Community-routes en door
@@ -739,6 +783,9 @@ Houd hier rekening mee bij het ontwerp:
 
 - **Telegram-bot**: ritten automatisch in een kanaal posten en ritten via de bot
   aanmaken. Houd de ritten-logica daarom in de servicelaag, niet in de router,
-  zodat een bot dezelfde code kan gebruiken.
+  zodat een bot dezelfde code kan gebruiken. `buildShareText()` in
+  `RidesPage.tsx` is nu de eerste stap (kopiëren naar klembord); een latere
+  bot-integratie kan dit format als basis gebruiken of hetzelfde bericht
+  server-side laten opbouwen zodra de bot rechtstreeks post.
 - Ritten aanmaken wordt verder uitgewerkt (herhalende ritten, aanmeldingen,
   wegkapitein-rollen).

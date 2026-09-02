@@ -39,6 +39,21 @@ function weatherIcon(code: number, isDay: boolean) {
   return <IconCloudRain size={24} color="var(--mantine-color-blue-5)" />;
 }
 
+/** Korte Nederlandse omschrijving per WMO-weercode, voor gebruik in
+ *  tekst (bijv. het deel-bericht van een rit). */
+export function weatherLabel(code: number, isDay: boolean): string {
+  if (code === 0 || code === 1) return isDay ? "Zonnig" : "Helder";
+  if (code === 2) return "Half bewolkt";
+  if (code === 3) return "Bewolkt";
+  if (code === 45 || code === 48) return "Mist";
+  if ([51, 53, 55, 56, 57].includes(code)) return "Motregen";
+  if ([61, 63, 65, 66, 67].includes(code)) return "Regen";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "Sneeuw";
+  if ([80, 81, 82].includes(code)) return "Buien";
+  if ([95, 96, 99].includes(code)) return "Onweer";
+  return "Wisselvallig";
+}
+
 interface WeatherStripProps {
   loading: boolean;
   hours: WeatherHour[] | null;
