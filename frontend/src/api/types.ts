@@ -270,6 +270,36 @@ export interface WaterResult {
   water_points: WaterPoint[];
 }
 
+export interface LegalitySegment {
+  severity: "forbidden" | "warning";
+  code: string;
+  label: string;
+  way_id: number | null;
+  way_name: string | null;
+  highway: string | null;
+  start_km: number;
+  end_km: number;
+  length_m: number;
+  coordinates: [number, number][];
+}
+
+export interface LegalityReport {
+  total_distance_km: number;
+  forbidden_count: number;
+  warning_count: number;
+  checked_at: string;
+  source: string;
+  segments: LegalitySegment[];
+}
+
+export interface LegalityStatus {
+  status: "idle" | "running" | "done" | "error";
+  progress: number;
+  message: string | null;
+  error: string | null;
+  report: LegalityReport | null;
+}
+
 export interface RouteFilterState {
   search: string;
   kmMin: number | null;

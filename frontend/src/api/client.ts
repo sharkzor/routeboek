@@ -27,6 +27,7 @@ import type {
   UpvoteResult,
   User,
   UserSummary,
+  LegalityStatus,
   WaterResult,
 } from "./types";
 
@@ -304,6 +305,16 @@ export const api = {
     request<EventItem>(`/api/events/${id}/join`, { method: "POST", ...json({ transport }) }),
   leaveEvent: (id: number) =>
     request<EventItem>(`/api/events/${id}/leave`, { method: "POST" }),
+
+  // ------------------------------------------- controle op verboden paden
+  startLegalityCheck: (routeId: number, refresh = false) =>
+    request<LegalityStatus>(
+      `/api/routes/${routeId}/legality` + query({ refresh: refresh || null }),
+      { method: "POST" },
+    ),
+
+  legalityStatus: (routeId: number) =>
+    request<LegalityStatus>(`/api/routes/${routeId}/legality`),
 
   // ----------------------------------------------------------- waterpunten
   waterPoints: (routeId: number, radiusM: number) =>

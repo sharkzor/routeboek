@@ -521,6 +521,41 @@ class WaterResult(BaseModel):
     water_points: list[WaterPointOut]
 
 
+# ------------------------------------------------------- controle op verboden paden
+
+
+class LegalitySegmentOut(BaseModel):
+    severity: str
+    code: str
+    label: str
+    way_id: int | None = None
+    way_name: str | None = None
+    highway: str | None = None
+    start_km: float
+    end_km: float
+    length_m: float
+    coordinates: list[list[float]]
+
+
+class LegalityReportOut(BaseModel):
+    total_distance_km: float
+    forbidden_count: int
+    warning_count: int
+    checked_at: datetime
+    source: str
+    segments: list[LegalitySegmentOut]
+
+
+class LegalityStatusOut(BaseModel):
+    """Voortgang van de (achtergrond)controle; `report` is pas gevuld bij done."""
+
+    status: str  # idle | running | done | error
+    progress: float = 0.0
+    message: str | None = None
+    error: str | None = None
+    report: LegalityReportOut | None = None
+
+
 # ---------------------------------------------------------------------- admin
 
 

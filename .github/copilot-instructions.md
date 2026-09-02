@@ -91,10 +91,12 @@ routeboek/
 │       │   ├── rides.py              ritten organiseren en deelnemen
 │       │   ├── water.py              waterpunten toevoegen aan een GPX
 │       │   ├── social.py             reacties en waarderingen
+│       │   ├── legality.py           controle op verboden paden (achtergrondtaak)
 │       │   ├── community.py          community-routes: import, aanmaken, upvoten
 │       │   └── admin.py              beheer van routes (incl. promoveren) en gebruikers
 │       ├── services/
-│       │   └── rides.py              ritten-logica los van FastAPI
+│       │   ├── rides.py              ritten-logica los van FastAPI
+│       │   └── legality.py           OSM-controle op verboden paden
 │       └── water/                    overgenomen uit /home/shark/gpx
 │           ├── geo.py                projectie, NL-detectie, bounding box
 │           ├── gpx_service.py        GPX lezen/schrijven
@@ -108,7 +110,8 @@ routeboek/
 │       ├── api/                      typed fetch-client (client.ts, types.ts)
 │       ├── auth/AuthContext.tsx      sessiestatus
 │       ├── components/               AppLayout, AuthShell, Guards, RouteCard,
-│       │                             RouteFilters, RouteMap, Stars, WaterDialog
+│       │                             RouteFilters, RouteMap, Stars, WaterDialog,
+│       │                             LegalityCheck, WeatherStrip
 │       ├── pages/                    Login, Register, ForgotPassword,
 │       │                             ResetPassword, Verify, Routes,
 │       │                             RouteDetail, Rides, RideForm,
@@ -480,6 +483,73 @@ lijn erover. `media_url()`/`GET /api/routes/{id}/map` in
   eigen CSP-regels (zie beveiligingsregel 12); deze miniatuur is een losse,
   server-side gerenderde PNG en heeft dat probleem niet, want hij wordt
   vanaf `'self'` geserveerd.
+
+### Controle op verboden paden
+Op de routedetailpagina staat de knop "Controleer op verboden paden"
+(`app/services/legality.py`, `app/routers/legality.py`, frontend
+`components/LegalityCheck.tsx` + de `legalitySegments`-prop van
+`RouteMap.tsx`). Die controleert achteraf of een route over stukken loopt
+waar fietsen niet (zonder meer) mag. Alleen bedoeld voor Nederland.
+
+- **Bron: OpenStreetMap via de Overpass API.** Geen API-sleutel, geen
+  registratie, en voor Nederland zeer nauwkeurig getagd op toegankelijkheid.
+  Er is geen officiële overheidsdataset die dit landsdekkend en gratis biedt.
+- **De route wordt in blokken van 100 punten opgevraagd** met een
+  corridorquery (`way["highway"](around:30, <polyline>)`). Dit is duur
+  uitgezocht; de valkuilen niet opnieuw onderzoeken:
+  - De hele route in één `around` werkt niet: 300+ punten draait ruim twee
+    minuten en geeft dan *nul* resultaten terug.
+  - Boven ~100 punten per blok loopt de querytijd hard op (gemeten: 100
+    punten ~3 s, 150 punten ~24 s).
+  - Het tagfilter moet **in** de `around`/bbox-query staan. Eerst alles
+    ophalen en daarna filteren (`way(around:...)->.w; way.w[...]`) loopt bij
+    elke grootte in een timeout, want dan kan Overpass zijn index niet
+    gebruiken. Om dezelfde reden krijgt elke `bicycle=`/`access=`-clausule
+    er `["highway"]` bij, anders volgt een 504.
+  - Een eerdere versie deelde het gebied op in vaste kaartvakken van ~2,8 km.
+    Die is verworpen: hij haalt de hele omgeving op in plaats van alleen de
+    corridor en was ruim vijf keer zo traag. Niet opnieuw invoeren.
+  - **Eén verzoek tegelijk.** Twee gelijktijdige corridorqueries leverden bij
+    de publieke instances structureel 429/504 op, waardoor het geheel juist
+    trager werd. `_overpass()` wisselt bij fouten van instance en wacht
+    steeds langer.
+- **We halen bewust álle wegen op, niet alleen de problematische.** Zonder de
+  toegestane wegen ernaast is niet vast te stellen of een melding echt is.
+  Dat scheelt bovendien niets in snelheid: `way["highway"]` bleek sneller dan
+  zeven losse tagclausules.
+- **Valse meldingen onderdrukken is het halve werk.** Een monster (elke 20 m)
+  telt alleen als overtreding wanneer een problematische weg binnen
+  `SNAP_RADIUS_M` (12 m) ligt **en** er geen enkele toegestane weg binnen
+  `ALLOWED_NEARBY_M` (20 m) is. Reden: opgeslagen `Route.coordinates` liggen
+  ~100 m uit elkaar en snijden bochten af, waardoor de lijn vlak langs een
+  parallel voetpad of zelfs de A12 kan komen. Zonder deze regel meldde een
+  gewoon trainingsrondje vier "overtredingen" die er geen waren. Verder moet
+  een melding minstens 35 m lang zijn en uit 3 monsters bestaan.
+  `highway=footway` met `footway=sidewalk|crossing` wordt nooit gemeld.
+- **Gebruik altijd de fijnste geometrie.** `_route_points()` neemt het
+  GPX-bestand als dat er is en valt alleen anders terug op
+  `Route.coordinates`. Met de GPX verdwenen alle valse meldingen van de
+  testroute; met de grove punten niet.
+- **Achtergrondtaak, geen synchroon verzoek.** Een eerste controle duurt een
+  paar minuten (60 km ≈ 8 blokken, plus wachttijd bij Overpass), veel te lang
+  voor één HTTP-verzoek achter de reverse proxy. `POST
+  /api/routes/{id}/legality` start of hervat de taak, `GET` geeft de
+  voortgang; de frontend polt elke 2 s en toont een voortgangsbalk.
+- **Twee caches op schijf**, allebei 30 dagen: de opgehaalde blokken
+  (`data/cache/osm_legality/`, gesleuteld op de blokcoördinaten) en het
+  eindrapport (`data/cache/route_legality/`, gesleuteld op de volledige
+  routegeometrie). Een tweede controle is daardoor meteen klaar. Verhoog
+  `RULESET_VERSION` zodra de regels of de query wijzigen; dan vervalt de oude
+  cache vanzelf.
+- **Regels** staan in `classify()`: `bicycle=no`, autosnelweg/autoweg
+  (`motorroad=yes`), `access`/`vehicle` op `no`/`private`, trap, voetpad,
+  gang en — als waarschuwing — voetgangersgebied, ruiterpad, afstappen,
+  verplicht fietspad ernaast en `path` + `foot=designated`. Een expliciete
+  `bicycle`-vrijgave gaat altijd voor, behalve op een autosnelweg.
+- **Visueel**: de gevonden stukken liggen als dikke rode (verboden) of oranje
+  (let op) lijnen over de route heen, met een popup die naar de OSM-way
+  linkt. Zodra er meldingen zijn wordt de routelijn zelf grijs — anders valt
+  het rood van "verboden" weg tegen het clubrood van de route.
 
 ### Waterpunten
 Bij het downloaden van een route kan de gebruiker drinkwaterpunten laten

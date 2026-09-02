@@ -4,7 +4,7 @@ import type { LatLngBoundsExpression, LatLngExpression } from "leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-import type { WaterPoint } from "../api/types";
+import type { LegalitySegment, WaterPoint } from "../api/types";
 
 /** Leaflet zoekt zijn marker-iconen standaard naast de CSS; dat werkt niet met Vite. */
 const waterIcon = L.divIcon({
@@ -25,13 +25,21 @@ const startIcon = L.divIcon({
   iconAnchor: [9, 9],
 });
 
+/** Rood voor "hier mag je niet fietsen", oranje voor "let op". */
+const SEVERITY_COLOR: Record<LegalitySegment["severity"], string> = {
+  forbidden: "#e03131",
+  warning: "#f08c00",
+};
+
 export default function RouteMap({
   coordinates,
   waterPoints = [],
+  legalitySegments = [],
   height = 420,
 }: {
   coordinates: [number, number][];
   waterPoints?: WaterPoint[];
+  legalitySegments?: LegalitySegment[];
   height?: number | string;
 }) {
   const positions = useMemo<LatLngExpression[]>(
@@ -73,7 +81,48 @@ export default function RouteMap({
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         maxZoom={19}
       />
-      <Polyline positions={positions} pathOptions={{ color: "#f4244e", weight: 4 }} />
+      {/* Zodra er meldingen zijn wordt de route grijs, anders vallen de rode
+          probleemstukken niet op tegen het clubrood van de routelijn. */}
+      <Polyline
+        positions={positions}
+        pathOptions={
+          legalitySegments.length > 0
+            ? { color: "#868e96", weight: 4 }
+            : { color: "#f4244e", weight: 4 }
+        }
+      />
+      {legalitySegments.map((segment, index) => (
+        <Polyline
+          key={`${segment.way_id ?? "x"}-${segment.start_km}-${index}`}
+          positions={segment.coordinates as LatLngExpression[]}
+          pathOptions={{ color: SEVERITY_COLOR[segment.severity], weight: 9, opacity: 0.85 }}
+        >
+          <Popup>
+            <strong>{segment.label}</strong>
+            <br />
+            Op {segment.start_km.toFixed(1)}-{segment.end_km.toFixed(1)} km ·{" "}
+            {Math.round(segment.length_m)} m
+            {segment.way_name && (
+              <>
+                <br />
+                {segment.way_name}
+              </>
+            )}
+            {segment.way_id !== null && (
+              <>
+                <br />
+                <a
+                  href={`https://www.openstreetmap.org/way/${segment.way_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Bekijk op OpenStreetMap
+                </a>
+              </>
+            )}
+          </Popup>
+        </Polyline>
+      ))}
       <Marker position={positions[0]} icon={startIcon}>
         <Popup>Start</Popup>
       </Marker>

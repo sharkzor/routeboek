@@ -29,6 +29,7 @@ import {
   IconDroplet,
   IconHeart,
   IconHeartFilled,
+  IconShieldSearch,
   IconThumbUp,
   IconTrash,
   IconTrophy,
@@ -39,6 +40,7 @@ import Stars from "../components/Stars";
 import StarInput from "../components/StarInput";
 import CommentsSection from "../components/CommentsSection";
 import WaterDialog from "../components/WaterDialog";
+import { LegalityResults, useLegalityCheck } from "../components/LegalityCheck";
 import { useAuth } from "../auth/AuthContext";
 
 // Leaflet is fors; alleen deze pagina heeft het nodig.
@@ -64,6 +66,7 @@ export default function RouteDetailPage() {
   const [promoting, setPromoting] = useState(false);
   const [deleteOpened, deleteModal] = useDisclosure(false);
   const [deleting, setDeleting] = useState(false);
+  const legality = useLegalityCheck(Number(routeId));
 
   useEffect(() => {
     let cancelled = false;
@@ -327,7 +330,11 @@ export default function RouteDetailPage() {
               </Center>
             }
           >
-            <RouteMap coordinates={route.coordinates} waterPoints={water?.water_points ?? []} />
+            <RouteMap
+              coordinates={route.coordinates}
+              waterPoints={water?.water_points ?? []}
+              legalitySegments={legality.report?.segments ?? []}
+            />
           </Suspense>
         </Paper>
       ) : (
@@ -384,7 +391,20 @@ export default function RouteDetailPage() {
             GPX met Waterpunten
           </Button>
         )}
+        {route.coordinates.length > 1 && (
+          <Button
+            variant="light"
+            color="grape"
+            leftSection={<IconShieldSearch size={18} />}
+            loading={legality.running}
+            onClick={legality.start}
+          >
+            Controleer op verboden paden
+          </Button>
+        )}
       </Group>
+
+      <LegalityResults status={legality.status} error={legality.error} />
 
       {water && (
         <Alert color="blue" variant="light">
