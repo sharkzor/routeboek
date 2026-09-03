@@ -131,10 +131,7 @@ export default function CommunityRoutesPage() {
   const filterPanel = (
     <RouteFilters
       value={filters}
-      onChange={(next) => {
-        setFilters(next);
-        if (isMobile) drawer.close();
-      }}
+      onChange={setFilters}
       bounds={bounds}
     />
   );
@@ -258,7 +255,16 @@ export default function CommunityRoutesPage() {
         position="left"
         size="sm"
       >
-        {filterPanel}
+        <Stack gap="md">
+          {filterPanel}
+          <Button
+            color="routeboek"
+            onClick={drawer.close}
+            style={{ position: "sticky", bottom: 0 }}
+          >
+            {data ? `Toon ${data.total} routes` : "Toon resultaten"}
+          </Button>
+        </Stack>
       </Drawer>
 
       <Modal opened={deleteOpened} onClose={deleteModal.close} title="Route verwijderen">

@@ -88,10 +88,7 @@ export default function RoutesPage() {
   const filterPanel = (
     <RouteFilters
       value={filters}
-      onChange={(next) => {
-        setFilters(next);
-        if (isMobile) drawer.close();
-      }}
+      onChange={setFilters}
       bounds={bounds}
     />
   );
@@ -197,7 +194,16 @@ export default function RoutesPage() {
         position="left"
         size="sm"
       >
-        {filterPanel}
+        <Stack gap="md">
+          {filterPanel}
+          <Button
+            color="routeboek"
+            onClick={drawer.close}
+            style={{ position: "sticky", bottom: 0 }}
+          >
+            {data ? `Toon ${data.total} routes` : "Toon resultaten"}
+          </Button>
+        </Stack>
       </Drawer>
     </Stack>
   );
