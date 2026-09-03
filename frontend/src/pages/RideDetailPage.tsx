@@ -19,6 +19,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
   IconArrowLeft,
+  IconBrandTelegram,
   IconClock,
   IconDots,
   IconGauge,
@@ -225,6 +226,16 @@ export default function RideDetailPage() {
                     leftSection={<IconLock size={12} />}
                   >
                     Privé
+                  </Badge>
+                )}
+                {ride.posted_to_telegram && (
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color="blue"
+                    leftSection={<IconBrandTelegram size={12} />}
+                  >
+                    Telegram
                   </Badge>
                 )}
                 {past && (

@@ -58,6 +58,27 @@ class Settings(BaseSettings):
     ride_max_participants: int = 12
     ride_default_participants: int = 10
 
+    # -- Telegram -----------------------------------------------------------
+    # Bot aangemaakt via @BotFather. Leeg laten schakelt de hele integratie
+    # onopvallend uit: posten/koppelen faalt dan stil (gelogd), de rest van de
+    # app blijft gewoon werken.
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = "stampersrouteboek_bot"
+    #: Chat-id van het kanaal waar nieuwe (niet-prive) ritten in gepost worden.
+    telegram_channel_id: str = ""
+    #: Gecontroleerd op elk binnenkomend webhook-verzoek (header
+    #: X-Telegram-Bot-Api-Secret-Token), zodat alleen Telegram zelf ons kan
+    #: aanroepen op dit ene ongeauthenticeerde endpoint.
+    telegram_webhook_secret: str = ""
+    telegram_link_token_ttl_minutes: int = 10
+    #: Hoe lang van tevoren de wegkapitein een Telegram-DM met de
+    #: deelnemerslijst krijgt.
+    telegram_reminder_minutes_before: int = 5
+
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.telegram_bot_token)
+
     # -- Waterpunten (overgenomen uit de gpx-waterpunten app) -------------
     # Alle routes van de club liggen in Nederland, dus is drinkwaterpunten.nl
     # de enige bron (geen OSM/Overpass-alternatief meer nodig).

@@ -181,9 +181,11 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
 
 ### Datamodel (kern)
 
-- `users` — account, `is_admin`, `is_active`, `email_verified_at`, lockout-teller
+- `users` — account, `is_admin`, `is_active`, `email_verified_at`, lockout-teller,
+  `telegram_chat_id`/`telegram_username`/`telegram_linked_at` (zie §11)
 - `user_sessions` — serverside sessies; de cookie bevat alleen een random token
-- `email_tokens` — eenmalige tokens (`verify_email`, `reset_password`)
+- `email_tokens` — eenmalige tokens (`verify_email`, `reset_password`,
+  `telegram_link`)
 - `routes` — de 166 geïmporteerde routes plus door admins toegevoegde routes
   én door leden aangeleverde community-routes (zie `origin` hieronder)
 - `route_ratings` — waardering (1-5) per lid per route, uniek per paar
@@ -192,7 +194,8 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
   route/gebruiker (`Route.upvote_count` is de teller)
 - `route_favorites` — favorietmarkering per lid per route, uniek per paar
 - `route_completions` — afgevinkte ("gereden") routes per lid, uniek per paar
-- `rides` — georganiseerde ritten
+- `rides` — georganiseerde ritten (incl. `telegram_message_id`/
+  `telegram_posted_at`/`organizer_reminder_sent_at`, zie §11)
 - `ride_participants` — aanmeldingen (uniek per rit/gebruiker)
 - `ride_guests` — leden die een privé-rit via de deellink hebben geopend en
   hem daarna blijven zien (uniek per rit/gebruiker)
@@ -205,10 +208,11 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
 
 Dit is een publiek bereikbare applicatie. Houd je aan de volgende regels:
 
-1. **Alle API-endpoints vereisen authenticatie**, behalve `/api/auth/*` en
-   `/api/health`. Gebruik de dependencies uit `app/deps.py`
-   (`current_user`, `current_admin`); voeg nooit een ongeauthenticeerd endpoint
-   toe zonder expliciete reden.
+1. **Alle API-endpoints vereisen authenticatie**, behalve `/api/auth/*`,
+   `/api/health` en `/api/telegram/webhook` (die laatste valideert in
+   plaats daarvan de geheime Telegram-header, zie §11). Gebruik de
+   dependencies uit `app/deps.py` (`current_user`, `current_admin`); voeg
+   nooit een ongeauthenticeerd endpoint toe zonder expliciete reden.
 2. **Wachtwoorden** worden gehasht met Argon2id. Nooit ergens loggen.
 3. **Sessies** zijn serverside. De cookie `rb_session` is `HttpOnly`,
    `SameSite=Lax` en `Secure` in productie. Uitloggen trekt de sessie in de
@@ -938,15 +942,92 @@ sudo docker rm -f rb-tmp-db
 
 ---
 
-## 11. Toekomstplannen
+## 11. Telegram-integratie
+
+Ritten worden automatisch gedeeld in het clubkanaal en de wegkapitein
+ontvangt vlak voor vertrek een deelnemersoverzicht per Telegram-DM
+(`app/services/telegram.py`, `app/routers/telegram.py`, frontend
+`AccountPage.tsx` + `RideFormPage.tsx`). Bot: `@stampersrouteboek_bot`.
+
+- **Geen telefoonnummer nodig.** Een lid koppelt zijn account via een
+  `/start <token>`-deeplink naar de bot; Telegram levert daarna een
+  `chat_id` terug waarmee de bot een DM kan sturen. Dit is de standaard
+  koppelmethode voor Telegram-bots en betrouwbaarder dan contactdeling.
+  `User.telegram_chat_id` (uniek, indexed), `telegram_username` en
+  `telegram_linked_at` bewaren die koppeling. Koppelen gaat via "Mijn
+  account" (`GET/POST /api/telegram/status|link|unlink`, alle drie achter
+  `current_user`).
+- **Koppeltokens hergebruiken de bestaande `EmailToken`-infrastructuur**
+  (nieuwe `TokenPurpose.telegram_link`-waarde, `issue_email_token()` /
+  `consume_email_token()`) — ondanks de naam "EmailToken" is die generiek
+  genoeg, dus is er geen nieuwe tabel nodig. TTL:
+  `telegram_link_token_ttl_minutes` (standaard 10 min).
+- **Eén bot voor twee taken**: berichten posten in het kanaal (bot is daar
+  admin met postrechten) én DM's sturen aan wegkapiteins. Dat laatste werkt
+  alleen als de wegkapitein ooit zelf `/start` heeft gestuurd — geen
+  koppeling betekent gewoon geen reminder, geen foutmelding.
+- **Webhook, geen polling** (`ensure_webhook()`, aangeroepen bij elke start
+  in `main.py`'s `lifespan()`): de app heeft toch al een publieke
+  HTTPS-URL achter de reverse proxy, dus is `setWebhook()` naar
+  `{BASE_URL}/api/telegram/webhook` efficiënter dan een `getUpdates`-loop.
+  Beveiligd met de header `X-Telegram-Bot-Api-Secret-Token`
+  (`TELEGRAM_WEBHOOK_SECRET`, constant-time vergeleken in
+  `constant_time_equals()`). Dit endpoint is naast `/api/auth/*` en
+  `/api/health` de **enige** uitzondering op beveiligingsregel 1 — Telegram
+  kan onmogelijk onze sessiecookie meesturen. Het geeft altijd `200 OK`
+  terug (fouten in de afhandeling worden gelogd, nooit als HTTP-fout
+  getoond), anders blijft Telegram dezelfde update herhaaldelijk aanbieden.
+- **Rit aanmaken/bewerken/annuleren praat best-effort met Telegram**
+  (`app/routers/rides.py`): een falende Telegram-aanroep mag een
+  rit-aanmaak/bewerking/annulering nooit laten mislukken — fouten worden
+  alleen gelogd. `RideCreateIn.post_to_telegram` (checkbox in
+  `RideFormPage.tsx`, standaard aan, verborgen bij een privé-rit) bepaalt
+  of een nieuwe rit meteen in het kanaal wordt geplaatst.
+  `Ride.telegram_message_id`/`telegram_posted_at` onthouden welk
+  kanaalbericht bij de rit hoort, zodat een latere bewerking dat bestaande
+  bericht **bewerkt** in plaats van een tweede te posten, en een annulering
+  het bericht op "geannuleerd" zet vóórdat de rit (hard delete) verdwijnt.
+  `RouteOut.posted_to_telegram` toont een Telegram-badge in
+  `RidesPage.tsx`/`RideDetailPage.tsx`.
+- **Kanaalbericht heeft een eigen, eenvoudiger format** dan
+  `buildShareText()` in `pages/ridesShare.ts` (geen weerbericht — dat zou
+  een extra blokkerende externe call tijdens het aanmaken van een rit
+  betekenen). Bekend duplicatierisico tussen de twee berichtformaten,
+  bewust geaccepteerd; hou ze in het oog bij toekomstige wijzigingen aan
+  één van beide.
+- **Nederlandse datums worden handmatig opgemaakt** in
+  `services/telegram.py` (`_WEEKDAGEN`/`_MAANDEN`), niet via de
+  systeemlocale: de container draait in de C-locale (Engelse namen).
+  Zelfde patroon als `SLOT_LABELS` in `services/rides.py`. Dit is de eerste
+  plek waar de backend zelf Nederlandse datums opmaakt; elders gebeurt dat
+  client-side met dayjs (nl-locale).
+- **Deelnemersreminder** (`start_reminder_loop()`, achtergrondthread, elke
+  60s): stuurt de wegkapitein — als die een gekoppeld account heeft — een
+  DM met de deelnemerslijst `telegram_reminder_minutes_before` (standaard
+  5) vóór het vertrektijdstip. `Ride.organizer_reminder_sent_at` voorkomt
+  dubbel versturen; blijft `None` zolang er geen gekoppelde chat_id is
+  (geen spam, want het venster sluit vanzelf na de ritdatum).
+- **Alle omgevingsvariabelen** (`TELEGRAM_BOT_TOKEN`,
+  `TELEGRAM_BOT_USERNAME`, `TELEGRAM_CHANNEL_ID`,
+  `TELEGRAM_WEBHOOK_SECRET`) staan in `.env` (niet in git) en moeten
+  expliciet in `docker-compose.yml`'s `environment:`-blok staan — anders
+  komen ze simpelweg niet in de container terecht, ook al staan ze in
+  `.env` (dit ging in eerste instantie mis: de webhook registreerde zich
+  pas nadat deze vier regels aan `docker-compose.yml` waren toegevoegd).
+  `telegram_enabled` (`config.py`) is `true` zodra er een bot-token is; bij
+  een lege token doet de hele integratie stilzwijgend niets (geen crash op
+  een omgeving zonder Telegram-configuratie).
+
+---
+
+## 12. Toekomstplannen
 
 Houd hier rekening mee bij het ontwerp:
 
-- **Telegram-bot**: ritten automatisch in een kanaal posten en ritten via de bot
-  aanmaken. Houd de ritten-logica daarom in de servicelaag, niet in de router,
-  zodat een bot dezelfde code kan gebruiken. `buildShareText()` in
-  `RidesPage.tsx` is nu de eerste stap (kopiëren naar klembord); een latere
-  bot-integratie kan dit format als basis gebruiken of hetzelfde bericht
-  server-side laten opbouwen zodra de bot rechtstreeks post.
+- **Telegram-botcommando's**: nu ondersteunt de bot alleen `/start <token>`
+  voor accountkoppeling (`handle_webhook_update()` in
+  `services/telegram.py`). Een rit aanmaken via de bot zelf kan later op
+  dezelfde route landen; houd nieuwe botcommando's in de servicelaag, niet
+  in de router.
 - Ritten aanmaken wordt verder uitgewerkt (herhalende ritten, aanmeldingen,
   wegkapitein-rollen).

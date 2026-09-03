@@ -7,6 +7,7 @@ import secrets
 from datetime import date, datetime, time, timezone
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -84,6 +85,9 @@ class TransportMode(str, enum.Enum):
 class TokenPurpose(str, enum.Enum):
     verify_email = "verify_email"
     reset_password = "reset_password"
+    #: Koppelt een Telegram-account aan een clublid (zie app/services/telegram.py).
+    #: Geen e-mail nodig; dit hergebruikt gewoon dezelfde eenmalige-tokenlogica.
+    telegram_link = "telegram_link"
 
 
 class User(Base):
@@ -102,6 +106,14 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
+    #: Telegram-koppeling (optioneel). Nodig om deze gebruiker een DM te
+    #: kunnen sturen (bv. de deelnemersreminder aan de wegkapitein); een bot
+    #: kan namelijk alleen chatten met wie ooit zelf `/start` heeft gestuurd.
+    telegram_chat_id: Mapped[int | None] = mapped_column(
+        BigInteger, unique=True, index=True
+    )
+    telegram_username: Mapped[str | None] = mapped_column(String(64))
+    telegram_linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -255,6 +267,15 @@ class Ride(Base):
     )
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
+    )
+    #: Gevuld zodra deze rit in het Telegram-kanaal gepost is. Laat toe het
+    #: bericht later te bewerken (bij een wijziging) of te markeren als
+    #: geannuleerd, in plaats van steeds een nieuw bericht te posten.
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    telegram_posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Voorkomt dat de wegkapitein de deelnemersreminder dubbel ontvangt.
+    organizer_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
     )
 
     owner: Mapped[User] = relationship(foreign_keys=[owner_id])

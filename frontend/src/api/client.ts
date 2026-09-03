@@ -24,6 +24,8 @@ import type {
   RouteSummary,
   SessionOut,
   TransportMode,
+  TelegramLink,
+  TelegramStatus,
   UpvoteResult,
   User,
   UserSummary,
@@ -294,6 +296,13 @@ export const api = {
   joinRide: (id: number) => request<Ride>(`/api/rides/${id}/join`, { method: "POST" }),
   leaveRide: (id: number) => request<Ride>(`/api/rides/${id}/leave`, { method: "POST" }),
   rideWeather: (id: number) => request<RideWeather>(`/api/rides/${id}/weather`),
+
+  // -------------------------------------------------------------- telegram
+  telegramStatus: () => request<TelegramStatus>("/api/telegram/status"),
+  telegramLink: () =>
+    request<TelegramLink>("/api/telegram/link", { method: "POST" }),
+  telegramUnlink: () =>
+    request<{ detail: string }>("/api/telegram/unlink", { method: "POST" }),
 
   // ----------------------------------------------------------------- events
   events: (includePast = false, mine = false) =>

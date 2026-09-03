@@ -22,6 +22,7 @@ import {
 import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
+  IconBrandTelegram,
   IconCalendarPlus,
   IconChevronDown,
   IconChevronUp,
@@ -332,6 +333,16 @@ export default function RidesPage() {
                               leftSection={<IconLock size={12} />}
                             >
                               Privé
+                            </Badge>
+                          )}
+                          {ride.posted_to_telegram && (
+                            <Badge
+                              size="sm"
+                              variant="light"
+                              color="blue"
+                              leftSection={<IconBrandTelegram size={12} />}
+                            >
+                              Telegram
                             </Badge>
                           )}
                           {past && (

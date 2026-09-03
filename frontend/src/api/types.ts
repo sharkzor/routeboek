@@ -143,6 +143,8 @@ export interface Ride {
   can_edit: boolean;
   /** Alleen bij een prive-rit: hoort als ?sleutel= in de deel-link. */
   share_token: string | null;
+  /** Staat dit bericht in het Telegram-kanaal? (nooit bij een prive-rit) */
+  posted_to_telegram: boolean;
 }
 
 export interface RideDefaults {
@@ -181,6 +183,19 @@ export interface RideInput {
   max_participants: number;
   notes_html: string;
   is_private: boolean;
+  /** Alleen relevant bij het aanmaken; de backend negeert dit bij bewerken. */
+  post_to_telegram?: boolean;
+}
+
+export interface TelegramStatus {
+  linked: boolean;
+  username: string | null;
+  linked_at: string | null;
+}
+
+export interface TelegramLink {
+  link: string;
+  expires_in_minutes: number;
 }
 
 export interface EventRouteRef {

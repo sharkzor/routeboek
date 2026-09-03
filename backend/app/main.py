@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.services import osm_index
+from app.services import telegram as telegram_service
 from app.routers import (
     admin,
     auth,
@@ -21,6 +22,7 @@ from app.routers import (
     rides,
     routes,
     social,
+    telegram,
     users,
     water,
 )
@@ -42,6 +44,10 @@ async def lifespan(app: FastAPI):
     # De wegenkaart voor de routecontrole ontbreekt bij een verse installatie
     # en veroudert daarna langzaam; dit haalt hem op de achtergrond binnen.
     osm_index.ensure_fresh_in_background()
+    # Registreert (idempotent) waar Telegram binnenkomende updates naartoe
+    # moet sturen; slaat zichzelf over zolang er geen bot-token is ingesteld.
+    telegram_service.ensure_webhook()
+    telegram_service.start_reminder_loop()
     logger.info("%s gestart op poort %s", settings.app_name, settings.port)
     yield
 
@@ -100,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(events.router)
     app.include_router(water.router)
     app.include_router(admin.router)
+    app.include_router(telegram.router)
 
     @app.exception_handler(404)
     async def spa_fallback(request: Request, exc):

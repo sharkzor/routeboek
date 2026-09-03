@@ -1,7 +1,9 @@
 """FastAPI-dependencies voor authenticatie en autorisatie.
 
-Elk endpoint buiten `/api/auth/*` en `/api/health` hoort `current_user` of
-`current_admin` te gebruiken.
+Elk endpoint buiten `/api/auth/*`, `/api/health` en `/api/telegram/webhook`
+hoort `current_user` of `current_admin` te gebruiken. Dat laatste endpoint
+ontvangt verzoeken van Telegram zelf (geen sessiecookie mogelijk) en
+controleert in plaats daarvan een geheime header; zie `routers/telegram.py`.
 """
 
 from __future__ import annotations

@@ -19,7 +19,7 @@ import {
 import { DateInput, TimeInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
-import { IconDeviceFloppy } from "@tabler/icons-react";
+import { IconBrandTelegram, IconDeviceFloppy } from "@tabler/icons-react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import { ApiError, api } from "../api/client";
@@ -55,6 +55,7 @@ interface FormValues {
   max_participants: string;
   notes_html: string;
   is_private: boolean;
+  post_to_telegram: boolean;
 }
 
 /** Vandaag als "YYYY-MM-DD" in lokale tijd; toISOString() zou een dag kunnen
@@ -93,6 +94,7 @@ export default function RideFormPage() {
       max_participants: "10",
       notes_html: "",
       is_private: false,
+      post_to_telegram: true,
     },
     validate: {
       name: (value) => (value.trim().length >= 2 ? null : "Geef de rit een naam."),
@@ -204,6 +206,7 @@ export default function RideFormPage() {
         max_participants: Number(values.max_participants),
         notes_html: values.notes_html,
         is_private: values.is_private,
+        post_to_telegram: values.post_to_telegram,
       };
       if (editing) {
         await api.updateRide(Number(rideId), payload);
@@ -352,6 +355,16 @@ export default function RideFormPage() {
               color="routeboek"
               {...form.getInputProps("is_private", { type: "checkbox" })}
             />
+
+            {!editing && !form.values.is_private && (
+              <Switch
+                label="Delen in Telegram-kanaal"
+                description="Post deze rit meteen in het clubkanaal"
+                color="routeboek"
+                thumbIcon={<IconBrandTelegram size={12} />}
+                {...form.getInputProps("post_to_telegram", { type: "checkbox" })}
+              />
+            )}
 
             <Group justify="flex-end" mt="sm">
               <Button variant="subtle" color="gray" onClick={() => navigate(-1)}>

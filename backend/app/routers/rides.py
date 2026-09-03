@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,9 +24,11 @@ from app.schemas import (
     UserSummary,
 )
 from app.services import rides as ride_service
+from app.services import telegram as telegram_service
 from app.services import weather as weather_service
 
 router = APIRouter(prefix="/api/rides", tags=["rides"])
+logger = logging.getLogger(__name__)
 
 
 def _to_out(ride: Ride, user: User) -> RideOut:
@@ -61,6 +64,7 @@ def _to_out(ride: Ride, user: User) -> RideOut:
         # Alleen bij een privé-rit heeft de link een sleutel nodig; bij een
         # openbare rit zou die alleen maar ruis in de URL zijn.
         share_token=ride.share_token if ride.is_private else None,
+        posted_to_telegram=ride.telegram_message_id is not None,
     )
 
 
@@ -208,7 +212,20 @@ def create_ride(
     # De wegkapitein rijdt zelf mee.
     db.add(RideParticipant(ride_id=ride.id, user_id=owner.id))
     db.commit()
-    return _to_out(_load_ride(db, ride.id), user)
+    ride = _load_ride(db, ride.id)
+
+    # Best-effort: een Telegram-hapering mag het aanmaken van een rit nooit
+    # laten mislukken. Prive-ritten worden hier bewust nooit gepost, ongeacht
+    # wat de aanvrager meestuurt.
+    if payload.post_to_telegram and not ride.is_private:
+        try:
+            telegram_service.post_ride(db, ride)
+        except telegram_service.TelegramError:
+            logger.exception(
+                "telegram: rit %s posten in kanaal mislukt", ride.id
+            )
+
+    return _to_out(ride, user)
 
 
 @router.patch("/{ride_id}", response_model=RideOut)
@@ -241,7 +258,15 @@ def update_ride(
         setattr(ride, key, value)
 
     db.commit()
-    return _to_out(_load_ride(db, ride.id), user)
+    ride = _load_ride(db, ride.id)
+    if ride.telegram_message_id is not None and not ride.is_private:
+        try:
+            telegram_service.update_ride_post(ride)
+        except telegram_service.TelegramError:
+            logger.exception(
+                "telegram: kanaalbericht van rit %s bijwerken mislukt", ride.id
+            )
+    return _to_out(ride, user)
 
 
 @router.delete("/{ride_id}", response_model=Message)
@@ -254,6 +279,13 @@ def cancel_ride(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Alleen de wegkapitein of een beheerder kan deze rit annuleren.",
         )
+    if ride.telegram_message_id is not None:
+        try:
+            telegram_service.mark_ride_cancelled(ride)
+        except telegram_service.TelegramError:
+            logger.exception(
+                "telegram: kanaalbericht van rit %s annuleren mislukt", ride.id
+            )
     db.delete(ride)
     db.commit()
     return Message(detail="De rit is verwijderd.")

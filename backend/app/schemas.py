@@ -322,6 +322,9 @@ class RideCreateIn(BaseModel):
     max_participants: int = Field(default=10, ge=4, le=12)
     notes_html: str = ""
     is_private: bool = False
+    #: Post deze rit meteen in het Telegram-kanaal (alleen relevant als de
+    #: rit niet prive is; de router negeert dit veld anders sowieso).
+    post_to_telegram: bool = True
 
 
 class RideUpdateIn(BaseModel):
@@ -372,6 +375,18 @@ class RideOut(BaseModel):
     #: Alleen gevuld bij een privé-rit: hoort in de deel-link, zodat een
     #: clublid die de link krijgt de rit kan openen en zich kan aanmelden.
     share_token: str | None = None
+    posted_to_telegram: bool = False
+
+
+class TelegramLinkOut(BaseModel):
+    link: str
+    expires_in_minutes: int
+
+
+class TelegramStatusOut(BaseModel):
+    linked: bool
+    username: str | None = None
+    linked_at: datetime | None = None
 
 
 class WeatherHourOut(BaseModel):

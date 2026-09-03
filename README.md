@@ -45,6 +45,11 @@ Productie: <https://routeboek.unencrypted.nl>
 - Beheerpagina: routes toevoegen (GPX-upload)/bewerken/verwijderen,
   gebruikersbeheer, en beheer van de lokale OSM-wegenkaart (status +
   handmatig verversen)
+- **Telegram-integratie**: nieuwe ritten worden automatisch in het
+  clubkanaal geplaatst (bewerken/annuleren werkt het bestaande
+  kanaalbericht bij), en de wegkapitein ontvangt vlak voor vertrek een
+  Telegram-DM met de deelnemerslijst. Koppelen via "Mijn account" (geen
+  telefoonnummer nodig, alleen een `/start`-deeplink naar de bot)
 
 ## Techniek
 
@@ -98,6 +103,9 @@ Vul in `.env` in ieder geval in:
   niet de verificatiemail ontvangen
 - `APP_UID` / `APP_GID` — uitkomst van `id -u` en `id -g`, zodat de container
   in `./data` mag schrijven
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHANNEL_ID` / `TELEGRAM_WEBHOOK_SECRET` —
+  optioneel; zonder bot-token blijft de Telegram-integratie stil uitgeschakeld
+  (geen ritten in een kanaal, geen deelnemersreminder)
 
 `SECRET_KEY` mag leeg blijven: wordt dan eenmalig gegenereerd in
 `data/secret.key`. Zet `COOKIE_SECURE=false` alleen als je lokaal via
