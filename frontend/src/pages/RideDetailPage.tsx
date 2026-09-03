@@ -33,18 +33,28 @@ import {
 } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import "dayjs/locale/nl";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { RIDE_TYPE_LABELS, type Ride, type WeatherHour } from "../api/types";
 import { WeatherStrip } from "../components/WeatherStrip";
-import { buildShareText, formatRideMoment, isWeatherEligible, shareText } from "./ridesShare";
+import {
+  buildShareText,
+  formatRideMoment,
+  isWeatherEligible,
+  shareNotice,
+  shareText,
+} from "./ridesShare";
 
 dayjs.locale("nl");
 
 export default function RideDetailPage() {
   const { rideId } = useParams();
+  // Een gedeelde link naar een prive-rit draagt de sleutel mee; die geeft de
+  // ontvanger eenmalig toegang, waarna de server hem als genodigde onthoudt.
+  const [searchParams] = useSearchParams();
+  const shareKey = searchParams.get("sleutel");
   const navigate = useNavigate();
   const { user } = useAuth();
   const [ride, setRide] = useState<Ride | null>(null);
@@ -58,7 +68,7 @@ export default function RideDetailPage() {
   const load = useCallback(async () => {
     if (!rideId) return;
     try {
-      const result = await api.ride(Number(rideId));
+      const result = await api.ride(Number(rideId), shareKey);
       setRide(result);
       setError(null);
     } catch (err) {
@@ -66,7 +76,7 @@ export default function RideDetailPage() {
         err instanceof ApiError ? err.message : "Rit laden is mislukt.",
       );
     }
-  }, [rideId]);
+  }, [rideId, shareKey]);
 
   useEffect(() => {
     void load();
@@ -123,7 +133,7 @@ export default function RideDetailPage() {
       const text = buildShareText(ride, weather.hours);
       await shareText(text);
       notifications.show({
-        message: "Rit gekopieerd naar klembord — plak 'm in WhatsApp of Telegram.",
+        message: shareNotice(ride),
         color: "green",
       });
     } catch {

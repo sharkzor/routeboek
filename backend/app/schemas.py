@@ -369,6 +369,9 @@ class RideOut(BaseModel):
     participant_count: int = 0
     is_joined: bool = False
     can_edit: bool = False
+    #: Alleen gevuld bij een privé-rit: hoort in de deel-link, zodat een
+    #: clublid die de link krijgt de rit kan openen en zich kan aanmelden.
+    share_token: str | None = None
 
 
 class WeatherHourOut(BaseModel):

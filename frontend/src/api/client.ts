@@ -280,7 +280,10 @@ export const api = {
   members: () => request<UserSummary[]>("/api/users"),
   rides: (includePast = false, mine = false) =>
     request<Ride[]>("/api/rides" + query({ include_past: includePast, mine })),
-  ride: (id: number) => request<Ride>(`/api/rides/${id}`),
+  // `key` is de sleutel uit een gedeelde link naar een prive-rit; de server
+  // legt de ontvanger daarmee vast als genodigde.
+  ride: (id: number, key?: string | null) =>
+    request<Ride>(`/api/rides/${id}` + query({ key: key || null })),
   rideDefaults: () => request<RideDefaults>("/api/rides/defaults"),
   createRide: (payload: RideInput) =>
     request<Ride>("/api/rides", { method: "POST", ...json(payload) }),

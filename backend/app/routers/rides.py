@@ -58,6 +58,9 @@ def _to_out(ride: Ride, user: User) -> RideOut:
         participant_count=len(participants),
         is_joined=any(p.user_id == user.id for p in ride.participants),
         can_edit=ride_service.can_edit(ride, user),
+        # Alleen bij een privé-rit heeft de link een sleutel nodig; bij een
+        # openbare rit zou die alleen maar ruis in de URL zijn.
+        share_token=ride.share_token if ride.is_private else None,
     )
 
 
@@ -69,6 +72,8 @@ def _load_ride(db: Session, ride_id: int) -> Ride:
             selectinload(Ride.owner),
             selectinload(Ride.route),
             selectinload(Ride.participants).selectinload(RideParticipant.user),
+            # `can_view` kijkt ook naar de genodigden van een privé-rit.
+            selectinload(Ride.guests),
         )
         # Zonder dit blijft een al in de identity map geladen Ride (bv. na
         # join/leave binnen hetzelfde request) zijn oude participants-lijst
@@ -127,10 +132,18 @@ def list_rides(
 
 @router.get("/{ride_id}", response_model=RideOut)
 def ride_detail(
-    ride_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)
+    ride_id: int,
+    key: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ) -> RideOut:
+    """Eén rit. `key` is de sleutel uit een gedeelde link naar een privé-rit.
+
+    Klopt die sleutel, dan wordt deze gebruiker als genodigde vastgelegd en
+    blijft de rit daarna ook zonder link zichtbaar in zijn overzicht.
+    """
     ride = _load_ride(db, ride_id)
-    if not ride_service.can_view(ride, user):
+    if not ride_service.accept_share_key(db, ride, user, key):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Deze rit bestaat niet."
         )

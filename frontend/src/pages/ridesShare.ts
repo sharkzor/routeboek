@@ -74,8 +74,31 @@ export function buildShareText(
     lines.push(`💬 ${ride.notes_html.trim()}`);
   }
   lines.push("");
-  lines.push(`📈 ${window.location.origin}/ritten/${ride.id}`);
+  lines.push(`📈 ${rideUrl(ride)}`);
   return lines.join("\n");
+}
+
+/** De deelbare link naar een rit.
+ *
+ *  Bij een prive-rit hangt de sleutel eraan: zonder die sleutel krijgt de
+ *  ontvanger de rit niet te zien, en kan hij zich er dus ook niet op
+ *  aanmelden. De sleutel geeft alleen toegang aan clubleden die ingelogd zijn.
+ */
+export function rideUrl(ride: Ride): string {
+  const base = `${window.location.origin}/ritten/${ride.id}`;
+  return ride.share_token ? `${base}?sleutel=${ride.share_token}` : base;
+}
+
+/** De bevestiging na het kopieren.
+ *
+ *  Bij een prive-rit is het belangrijk dat de organisator weet dat de link
+ *  werkt: zonder die uitleg lijkt "prive" te betekenen dat delen zinloos is.
+ */
+export function shareNotice(ride: Ride): string {
+  const base = "Rit gekopieerd naar klembord — plak 'm in WhatsApp of Telegram.";
+  return ride.is_private
+    ? `${base} Deze prive-rit is via deze link te openen; wie 'm opent kan zich aanmelden.`
+    : base;
 }
 
 /** Kopieert tekst naar het klembord, met een fallback voor browsers/omgevingen

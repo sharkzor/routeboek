@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+import secrets
 from datetime import date, datetime, time, timezone
 
 from sqlalchemy import (
@@ -23,6 +24,11 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+
+def new_share_token() -> str:
+    """Sleutel voor de deel-link van een rit; niet te raden."""
+    return secrets.token_urlsafe(24)[:32]
 
 
 def utcnow() -> datetime:
@@ -235,6 +241,13 @@ class Ride(Base):
     max_participants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     notes_html: Mapped[str] = mapped_column(Text, default="", nullable=False)
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    #: Sleutel in de deel-link. Zonder deze sleutel is een privé-rit voor
+    #: buitenstaanders onvindbaar; mét de sleutel mag een ingelogd lid hem
+    #: openen en zich aanmelden. Elke rit heeft er een, ook een openbare, zodat
+    #: privé aanzetten geen aparte stap nodig heeft.
+    share_token: Mapped[str] = mapped_column(
+        String(32), default=new_share_token, unique=True, nullable=False
+    )
 
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -250,6 +263,35 @@ class Ride(Base):
     participants: Mapped[list["RideParticipant"]] = relationship(
         back_populates="ride", cascade="all, delete-orphan"
     )
+    guests: Mapped[list["RideGuest"]] = relationship(
+        back_populates="ride", cascade="all, delete-orphan"
+    )
+
+
+class RideGuest(Base):
+    """Een lid dat een privé-rit via een gedeelde link heeft geopend.
+
+    Zonder deze tabel zou zo'n rit uit het overzicht verdwijnen zodra de link
+    weg is, ook al is hij bewust met deze persoon gedeeld. Eén rij per
+    lid/rit, net als bij favorieten; alleen privé-ritten leveren rijen op.
+    """
+
+    __tablename__ = "ride_guests"
+    __table_args__ = (UniqueConstraint("ride_id", "user_id", name="uq_ride_guest"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ride_id: Mapped[int] = mapped_column(
+        ForeignKey("rides.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    ride: Mapped["Ride"] = relationship(back_populates="guests")
+    user: Mapped[User] = relationship()
 
 
 class RideParticipant(Base):

@@ -141,6 +141,8 @@ export interface Ride {
   participant_count: number;
   is_joined: boolean;
   can_edit: boolean;
+  /** Alleen bij een prive-rit: hoort als ?sleutel= in de deel-link. */
+  share_token: string | null;
 }
 
 export interface RideDefaults {

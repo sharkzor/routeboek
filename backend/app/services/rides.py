@@ -6,12 +6,13 @@ dezelfde regels kan gebruiken om ritten aan te maken en te tonen.
 
 from __future__ import annotations
 
+import secrets
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Ride, RideParticipant, Route, User
+from app.models import Ride, RideGuest, RideParticipant, Route, User
 
 # De club rijdt standaard op woensdagavond en zondagochtend.
 # Sleutel is de weekdag volgens date.weekday() (maandag = 0).
@@ -50,7 +51,8 @@ def visible_rides_query(user: User, include_past: bool = False):
     """Ritten die deze gebruiker mag zien.
 
     Privé-ritten blijven buiten het standaardoverzicht; alleen de eigenaar, de
-    aanmaker, aangemelde deelnemers en beheerders zien ze.
+    aanmaker, aangemelde deelnemers, genodigden (`RideGuest`, iemand met wie de
+    link gedeeld is) en beheerders zien ze.
     """
     stmt = (
         select(Ride)
@@ -66,12 +68,14 @@ def visible_rides_query(user: User, include_past: bool = False):
 
     if not user.is_admin:
         joined = select(RideParticipant.ride_id).where(RideParticipant.user_id == user.id)
+        invited = select(RideGuest.ride_id).where(RideGuest.user_id == user.id)
         stmt = stmt.where(
             or_(
                 Ride.is_private.is_(False),
                 Ride.owner_id == user.id,
                 Ride.created_by_id == user.id,
                 Ride.id.in_(joined),
+                Ride.id.in_(invited),
             )
         )
     return stmt
@@ -82,7 +86,28 @@ def can_view(ride: Ride, user: User) -> bool:
         return True
     if ride.owner_id == user.id or ride.created_by_id == user.id:
         return True
-    return any(p.user_id == user.id for p in ride.participants)
+    if any(p.user_id == user.id for p in ride.participants):
+        return True
+    return any(g.user_id == user.id for g in ride.guests)
+
+
+def accept_share_key(db: Session, ride: Ride, user: User, key: str | None) -> bool:
+    """Verzilver een deel-link: leg vast dat dit lid de rit mag zien.
+
+    Zonder dit zou een gedeelde privé-rit weer uit het overzicht verdwijnen
+    zodra de link kwijt is. De sleutel zelf geeft geen toegang aan
+    buitenstaanders: je moet nog steeds ingelogd zijn als clublid.
+
+    Geeft terug of deze gebruiker de rit (nu) mag zien.
+    """
+    if can_view(ride, user):
+        return True
+    # `compare_digest` voorkomt dat de reactietijd iets over de sleutel prijsgeeft.
+    if not key or not secrets.compare_digest(key, ride.share_token):
+        return False
+    db.add(RideGuest(ride_id=ride.id, user_id=user.id))
+    db.commit()
+    return True
 
 
 def can_edit(ride: Ride, user: User) -> bool:

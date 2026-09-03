@@ -194,6 +194,8 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
 - `route_completions` — afgevinkte ("gereden") routes per lid, uniek per paar
 - `rides` — georganiseerde ritten
 - `ride_participants` — aanmeldingen (uniek per rit/gebruiker)
+- `ride_guests` — leden die een privé-rit via de deellink hebben geopend en
+  hem daarna blijven zien (uniek per rit/gebruiker)
 - `events` / `event_participants` — externe events en aanmeldingen (incl.
   vervoerskeuze per deelnemer)
 
@@ -304,6 +306,36 @@ snelheid km/u, max. deelnemers (4 t/m 12), opmerkingen, privé-rit.
 eerstvolgende van die twee momenten is de voorgevulde datum en tijd.
 
 Een privé-rit verschijnt niet in het standaardoverzicht.
+
+### Privé-ritten delen
+Een privé-rit is onzichtbaar voor wie er niet bij hoort, wat een kip-en-ei
+opleverde: je kon je niet aanmelden omdat je de rit niet zag, en je zag de rit
+niet omdat je niet aangemeld was. Opgelost met een **capability-link plus een
+gastenregistratie**, bewust minimaal gehouden:
+
+- **`Ride.share_token`** — één kolom, `secrets.token_urlsafe(24)[:32]`, uniek en
+  verplicht. *Elke* rit krijgt er één (ook openbare), zodat privé aanzetten geen
+  extra stap is. De API levert 'm alleen uit wanneer `is_private`, via
+  `RideOut.share_token`.
+- **`ride_guests`** — `(ride_id, user_id, created_at)` met unieke constraint op
+  het paar en `ondelete=CASCADE` op beide FK's; exact hetzelfde patroon als
+  `route_favorites`. `GET /api/rides/{id}?key=…` roept
+  `accept_share_key()` (`services/rides.py`) aan, dat de sleutel vergelijkt met
+  `secrets.compare_digest` en bij een treffer een `RideGuest` vastlegt. Daarna
+  ziet het lid de rit ook **zónder** link — in het overzicht en na afmelden —
+  want `visible_rides_query()` en `can_view()` kijken allebei naar de gasten.
+- **De sleutel geeft geen toegang aan buitenstaanders.** Het endpoint blijft
+  achter `current_user` (beveiligingsregel 1); je moet dus nog steeds ingelogd
+  clublid zijn. Een verkeerde sleutel geeft `404`, net als geen sleutel — geen
+  onderscheid, dus geen aanwijzing dat de rit bestaat.
+- Aanmelden werkt automatisch mee: `join_ride` gebruikt `can_view()`, en daar is
+  een gast al doorheen.
+- **Let op:** `_load_ride()` in `routers/rides.py` moet `selectinload(Ride.guests)`
+  meenemen, anders doet `can_view()` een lazy load per verzoek.
+- Frontend: `rideUrl()` in `pages/ridesShare.ts` hangt `?sleutel=` aan de link
+  van een privé-rit; `RideDetailPage` leest die via `useSearchParams` en geeft
+  hem door aan `api.ride(id, key)`. `shareNotice()` legt na het kopiëren uit dat
+  de link werkt — zonder die zin lijkt "privé" te betekenen dat delen zinloos is.
 
 ### Layout van het ritten-overzicht
 De ritkaart in `RidesPage.tsx` is bewust **mobile-first** vormgegeven, naar

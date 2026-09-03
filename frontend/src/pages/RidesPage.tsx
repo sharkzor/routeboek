@@ -50,6 +50,7 @@ import {
   buildShareText,
   formatRideMoment,
   isWeatherEligible,
+  shareNotice,
   shareText,
 } from "./ridesShare";
 
@@ -135,7 +136,7 @@ export default function RidesPage() {
       const text = buildShareText(ride, hours);
       await shareText(text);
       notifications.show({
-        message: "Rit gekopieerd naar klembord — plak 'm in WhatsApp of Telegram.",
+        message: shareNotice(ride),
         color: "green",
       });
     } catch {
