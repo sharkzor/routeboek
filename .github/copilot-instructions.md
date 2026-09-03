@@ -96,7 +96,8 @@ routeboek/
 │       │   └── admin.py              beheer van routes (incl. promoveren) en gebruikers
 │       ├── services/
 │       │   ├── rides.py              ritten-logica los van FastAPI
-│       │   └── legality.py           OSM-controle op verboden paden
+│       │   ├── legality.py           OSM-controle op verboden paden
+│       │   └── osm_index.py          lokale wegenkaart (SQLite + R*Tree)
 │       └── water/                    overgenomen uit /home/shark/gpx
 │           ├── geo.py                projectie, NL-detectie, bounding box
 │           ├── gpx_service.py        GPX lezen/schrijven
@@ -125,7 +126,9 @@ routeboek/
 └── data/                             volume, niet in git
     ├── seed/routes.json              gescrapete metadata (166 routes, 9,4 MB)
     ├── media/{gpx,tcx,maps}/         routebestanden en kaartafbeeldingen
-    ├── cache/                        drinkwaterpunten-cache, osm_tiles/, route_maps/
+    ├── cache/                        drinkwaterpunten-cache, osm_tiles/, route_maps/,
+    │                                 route_legality/
+    ├── osm/netherlands.sqlite        lokale wegenkaart (~435 MB, maandelijks vers)
     ├── tmp/                          gegenereerde GPX met waterpunten
     └── secret.key                    automatisch gegenereerd als SECRET_KEY leeg is
 ```
@@ -491,56 +494,67 @@ Op de routedetailpagina staat de knop "Controleer op verboden paden"
 `RouteMap.tsx`). Die controleert achteraf of een route over stukken loopt
 waar fietsen niet (zonder meer) mag. Alleen bedoeld voor Nederland.
 
-- **Bron: OpenStreetMap via de Overpass API.** Geen API-sleutel, geen
-  registratie, en voor Nederland zeer nauwkeurig getagd op toegankelijkheid.
-  Er is geen officiële overheidsdataset die dit landsdekkend en gratis biedt.
-- **Waar de tijd zit (gemeten, niet gegokt):** de eigen verwerking van een
-  route kost **0,3 s**. Alle wachttijd komt van Overpass. Een geslaagde
-  corridorquery duurt 2-5 s; de uitschieters komen door mislukte pogingen.
-  Optimaliseer dus niets aan de matching — daar valt niets te halen.
-- **De publieke Overpass is de bottleneck én een risico.** Tijdens het
-  ontwikkelen is dit IP door alle drie de instances geblokkeerd (`overpass-
-  api.de` weigerde de verbinding, de andere gaven 429 op zelfs `/api/status`).
-  De gratis instances zijn niet bedoeld voor deze belasting. Wie hieraan
-  verder werkt: ga niet harder queryen, dat maakt het erger.
-- **De route wordt in blokken opgevraagd** met een corridorquery
-  (`way["highway"](around:35, <polyline>)`). Duur uitgezochte valkuilen, niet
-  opnieuw onderzoeken:
-  - `around` met meerdere coördinaten is een **polyline**, geen losse punten.
-    Op een recht stuk zijn dus twee punten genoeg. De lijn wordt daarom met
-    Douglas-Peucker vereenvoudigd (`SIMPLIFY_TOLERANCE_M`, 5 m), wat ruim de
-    helft van de punten scheelt zonder de corridor te versmallen.
-  - De hele route in één `around` werkt niet: 300+ punten draait ruim twee
-    minuten en geeft dan *nul* resultaten.
-  - Het tagfilter moet **in** de `around`/bbox-query staan. Eerst alles
-    ophalen en daarna filteren (`way(around:...)->.w; way.w[...]`) loopt bij
-    elke grootte in een timeout, want dan kan Overpass zijn index niet
-    gebruiken. Om dezelfde reden krijgt elke `bicycle=`/`access=`-clausule er
-    `["highway"]` bij, anders volgt een 504.
-  - Een eerdere versie deelde het gebied op in vaste kaartvakken van ~2,8 km.
-    Verworpen: die haalt de hele omgeving op in plaats van alleen de corridor
-    en was ruim vijf keer zo traag. Niet opnieuw invoeren.
-- **Blokgrootte is adaptief, en dat moet ook.** De kostenfactor is niet de
-  lengte maar het aantal wegen in de corridor, en dat scheelt een orde van
-  grootte tussen polder en stad: 10 km door het IJsselmeergebied kost ~4 s,
-  dezelfde 10 km rond Utrecht loopt op élke instance in een 504. We beginnen
-  op `MAX_CHUNK_KM` (8 km) en `_fetch_chunk_adaptive()` halveert een blok dat
-  te zwaar blijkt. Een vaste blokgrootte werkt dus niet voor heel Nederland.
-- **Onderscheid 429 van 504.** Een 429 gaat over ons (te veel verzoeken →
-  wachten helpt), een 504 of read-timeout gaat over de query (te zwaar →
-  alleen opdelen helpt). Ze hetzelfde behandelen kostte ooit 196 s voor één
-  blok, omdat we drie keer een timeout van 120 s afwachtten. De HTTP-timeout
-  staat daarom op 45 s: een geslaagde query is in seconden klaar.
-- **Een mislukt blok is een harde fout, geen detail.** Eerder werden fouten
-  geslikt zolang minder dan de helft van de blokken faalde. Gevolg: een route
-  die eerst 5 overtredingen gaf, meldde er stilletjes nog maar 2 — we hadden
-  daar simpelweg niet gekeken. Voor deze feature is een onvolledig "niets
-  gevonden" het gevaarlijkste antwoord dat er is. Geslaagde blokken staan in
-  de cache, dus opnieuw proberen is goedkoop en vult de gaten aan.
-- **We halen bewust álle wegen op, niet alleen de problematische.** Zonder de
-  toegestane wegen ernaast is niet vast te stellen of een melding echt is.
-  Dat scheelt bovendien niets in snelheid: `way["highway"]` bleek sneller dan
-  zeven losse tagclausules.
+- **Bron: OpenStreetMap, uit een lokale kopie.** Voor Nederland is OSM zeer
+  nauwkeurig getagd op toegankelijkheid (`bicycle`, `access`, `highway`) en
+  het is de enige gratis bron zonder API-sleutel die dit landsdekkend biedt.
+  Een officiële overheidsdataset hiervoor bestaat niet.
+- **Niet via de Overpass API — dat is geprobeerd en verworpen.** De eerste
+  versie haalde de wegen per route live op bij de publieke Overpass-servers.
+  Functioneel werkte dat, in de praktijk niet: één controle kostte drie tot
+  vijf minuten (waarvan 0,3 s eigen rekenwerk en de rest wachten), en na een
+  handvol controles blokkeerden alle drie de publieke instances dit
+  IP-adres — `overpass-api.de` weigerde de verbinding, de andere gaven 429 op
+  zelfs `/api/status`. Zo'n gedeelde gratis dienst is daar ook niet voor
+  bedoeld. **Voer deze aanpak niet opnieuw in**, ook niet als "fallback": met
+  de lokale kaart is een hele routecontrole sneller dan één Overpass-verzoek
+  vroeger was.
+- **De lokale kaart staat in `app/services/osm_index.py`.** Het is één
+  SQLite-bestand (`data/osm/netherlands.sqlite`, ~435 MB, 2,8 miljoen wegen)
+  met een R*Tree-index. Opbouwen gaat in vier stappen en duurt ongeveer drie
+  minuten:
+  1. het Nederland-extract van Geofabrik downloaden (~1,4 GB, dagelijks vers);
+  2. `osmium tags-filter` houdt alleen de wegen over (1,4 GB → ~180 MB);
+  3. `osmium export -a id` maakt daar regel-per-regel GeoJSON van, mét
+     geometrie — let op de `-a id`, want zonder die vlag zet osmium géén
+     OSM-id in de uitvoer en komt er een lege index uit;
+  4. Python leest dat in en schrijft de SQLite-index.
+  De nieuwe kaart wordt volledig opgebouwd in een werkmap en pas op het
+  laatste moment via `os.replace()` op zijn plaats gezet, zodat een mislukte
+  verversing de bestaande kaart nooit kapotmaakt. De werkmap (ruim 2 GB) gaat
+  daarna weg.
+- **Systeemeis: stap 2 piekt op ~2,5 GB geheugen.** osmium houdt daar de
+  node-verwijzingen van heel Nederland vast. Een schijfgebaseerde index
+  (`-i sparse_file_array`) is gemeten en hielp niet: dezelfde piek én vier
+  keer zo traag. Houd hier rekening mee bij het kiezen van een hostingpakket.
+  `osmium-tool` komt uit apt en staat in de `Dockerfile`.
+- **Waarom de tags worden bewaard en niet het oordeel.** De index slaat de
+  OSM-tags op, niet de uitkomst van `classify()`. De regels over wat wel en
+  niet mag veranderen vaker dan de kaart zelf, en zo kost een regelwijziging
+  geen nieuwe download van 1,4 GB. Alleen de tags uit `KEEP_TAGS` gaan mee;
+  houd die lijst gelijk aan wat `classify()` uitleest.
+- **Coördinaten staan als graden × 1e7 in een int32**, net zoals OSM ze zelf
+  bewaart: ruim 1 cm nauwkeurig en half zo groot als een double. Let op de
+  volgorde — OSM en GeoJSON werken met lon/lat, de rest van deze applicatie
+  met lat/lon. `unpack_coords()` draait dat om.
+- **Zoeken gebeurt per stuk route, niet in één keer.** `_boxes()` deelt de
+  route op in vakken van `MAX_BOX_KM` (3 km) met `BOX_MARGIN_M` marge. Eén
+  vak om de hele route is verleidelijk maar verkeerd: bij 40 km beslaat dat
+  al gauw 15 bij 15 km met tienduizenden wegen. Gemeten: een stadsvak van
+  1 km kost 17 ms, een vak van 20 km 675 ms.
+- **Verversen is een beheerfunctie.** `GET`/`POST /api/admin/map(/refresh)`
+  in `routers/admin.py`, tabblad "Wegenkaart" in `AdminPage.tsx`. Het draait
+  als achtergrondtaak met voortgang, want het duurt minuten en piekt in
+  geheugen. Daarnaast kijkt `ensure_fresh_in_background()` (gestart vanuit
+  `main.py`) dagelijks of de kaart ontbreekt of ouder is dan `MAX_AGE_DAYS`
+  (30) en ververst dan zelf. De controle zelf blijft ondertussen gewoon
+  werken op de oude kaart.
+- **Doorlooptijden na de omzetting** (inclusief polling-overhead, gemeten via
+  de API): 30 km → 0,6 s, 60 km → 1,3 s, 318 km → 4,8 s. Voorheen was dat
+  200 tot 300 s. Optimaliseer hier niets meer aan zonder eerst te meten.
+- **We indexeren bewust álle wegen, niet alleen de problematische.** Zonder
+  de toegestane wegen ernaast is niet vast te stellen of een melding echt is
+  (zie de volgende alinea). Dat is ook de reden dat de index 435 MB is en niet
+  een fractie daarvan.
 - **Valse meldingen onderdrukken is het halve werk.** Een monster (elke 20 m)
   telt alleen als overtreding wanneer een problematische weg binnen
   `SNAP_RADIUS_M` (12 m) ligt **en** er geen enkele toegestane weg binnen
@@ -554,17 +568,16 @@ waar fietsen niet (zonder meer) mag. Alleen bedoeld voor Nederland.
   GPX-bestand als dat er is en valt alleen anders terug op
   `Route.coordinates`. Met de GPX verdwenen alle valse meldingen van de
   testroute; met de grove punten niet.
-- **Achtergrondtaak, geen synchroon verzoek.** Een eerste controle duurt een
-  paar minuten (60 km ≈ 8 blokken, plus wachttijd bij Overpass), veel te lang
-  voor één HTTP-verzoek achter de reverse proxy. `POST
-  /api/routes/{id}/legality` start of hervat de taak, `GET` geeft de
-  voortgang; de frontend polt elke 2 s en toont een voortgangsbalk.
-- **Twee caches op schijf**, allebei 30 dagen: de opgehaalde blokken
-  (`data/cache/osm_legality/`, gesleuteld op de blokcoördinaten) en het
-  eindrapport (`data/cache/route_legality/`, gesleuteld op de volledige
-  routegeometrie). Een tweede controle is daardoor meteen klaar. Verhoog
-  `RULESET_VERSION` zodra de regels of de query wijzigen; dan vervalt de oude
-  cache vanzelf.
+- **Nog steeds een achtergrondtaak, hoewel het snel genoeg zou zijn.** `POST
+  /api/routes/{id}/legality` start de taak, `GET` geeft de voortgang, en de
+  frontend polt elke 2 s. Die opzet is blijven staan omdat hij weinig kost,
+  de langste routes buiten de time-out van de reverse proxy houdt en de
+  voortgangsmelding oplevert die de gebruiker toch al ziet.
+- **Eén cache op schijf**: het eindrapport (`data/cache/route_legality/`,
+  gesleuteld op de volledige routegeometrie), 30 dagen geldig. De blokcache
+  van de Overpass-versie is vervallen — met een lokale kaart is opnieuw
+  ophalen goedkoper dan cachebeheer. Verhoog `RULESET_VERSION` zodra de
+  regels wijzigen; dan vervalt de oude cache vanzelf.
 - **Regels** staan in `classify()`: `bicycle=no`, autosnelweg/autoweg
   (`motorroad=yes`), `access`/`vehicle` op `no`/`private`, trap, voetpad,
   gang en — als waarschuwing — voetgangersgebied, ruiterpad, afstappen,
@@ -594,7 +607,9 @@ toevoegen aan de GPX. De logica is overgenomen uit `/home/shark/gpx`
 Routes toevoegen (GPX-upload), bewerken en verwijderen (`GET/PATCH/DELETE
 /api/admin/routes/{id}`; de admin-detailendpoint negeert `is_active` zodat
 ook verborgen routes te bewerken zijn), gebruikers activeren/blokkeren en
-adminrechten toekennen.
+adminrechten toekennen. Daarnaast een tabblad **Wegenkaart** met de
+staat van de lokale OSM-kaart (aantal wegen, omvang, leeftijd) en een knop om
+hem bij te werken; zie "Controle op verboden paden".
 
 ### Windrichting inschatten
 Sommige gemigreerde routes hadden geen windrichting-tag. Heuristiek (van de

@@ -1,9 +1,11 @@
 """Een route controleren op paden waar fietsen niet (zonder meer) mag.
 
-De controle raakt bij een koude cache tientallen kaartvakken bij Overpass en
-duurt dan te lang voor één HTTP-verzoek achter de reverse proxy. Daarom start
-`POST` een achtergrondtaak en polt de frontend met `GET`. Is er al een rapport
-voor deze coordinaten, dan komt dat meteen terug.
+De controle draait op de lokale wegenkaart en duurt nog een halve seconde tot
+enkele seconden bij de langste routes. Dat past ruim binnen één verzoek, maar
+de opzet met een achtergrondtaak (`POST` start, de frontend polt met `GET`)
+blijft staan: hij kost weinig, houdt de langste routes buiten de time-out van
+de reverse proxy, en levert meteen de voortgangsmelding op die de gebruiker
+toch al te zien krijgt.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from app.deps import current_user
 from app.models import User
 from app.routers.routes import _media_path, get_route_or_404
 from app.schemas import LegalityReportOut, LegalitySegmentOut, LegalityStatusOut
-from app.services import legality
+from app.services import legality, osm_index
 from app.water.gpx_service import GpxError, extract_route_points, parse_gpx
 
 router = APIRouter(prefix="/api/routes", tags=["legality"])
@@ -68,6 +70,19 @@ def _to_out(report: legality.Report) -> LegalityReportOut:
     )
 
 
+def _error_text(detail: str | None) -> str:
+    """Vertaal een storing naar iets waar de gebruiker wat mee kan."""
+    if not osm_index.status().available:
+        return (
+            "De wegenkaart is nog niet ingeladen, dus deze controle kan nog niet "
+            "worden uitgevoerd. Een beheerder kan de kaart ophalen via Beheer."
+        )
+    return (
+        "De controle is niet gelukt. Probeer het opnieuw; blijft het misgaan, "
+        "meld het dan bij een beheerder."
+    )
+
+
 def _status(key: str) -> LegalityStatusOut:
     job = legality.get_job(key)
     if job is not None and job.status == "running":
@@ -78,11 +93,7 @@ def _status(key: str) -> LegalityStatusOut:
         return LegalityStatusOut(
             status="error",
             progress=job.progress,
-            error=(
-                "De kaartdienst van OpenStreetMap is op dit moment overbelast en "
-                "weigert verzoeken. Probeer het over een kwartier opnieuw; de al "
-                "opgehaalde delen blijven bewaard, dus een nieuwe poging is sneller."
-            ),
+            error=_error_text(job.error),
         )
     report = legality.load_cached(key)
     if report is not None:

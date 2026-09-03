@@ -11,6 +11,7 @@ import {
   Group,
   Loader,
   Modal,
+  Progress,
   MultiSelect,
   Select,
   Stack,
@@ -27,10 +28,12 @@ import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconMap,
+  IconMapPin,
   IconPencil,
   IconPlus,
   IconSearch,
   IconTrash,
+  IconRefresh,
   IconUpload,
   IconUsers,
 } from "@tabler/icons-react";
@@ -42,6 +45,7 @@ import {
   ROUTE_TYPE_LABELS,
   WIND_LABELS,
   type CategoryCode,
+  type OsmMapStatus,
   type RouteSummary,
   type RouteType,
   type User,
@@ -60,12 +64,18 @@ export default function AdminPage() {
           <Tabs.Tab value="users" leftSection={<IconUsers size={16} />}>
             Gebruikers
           </Tabs.Tab>
+          <Tabs.Tab value="map" leftSection={<IconMapPin size={16} />}>
+            Wegenkaart
+          </Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="routes">
           <RoutesTab />
         </Tabs.Panel>
         <Tabs.Panel value="users">
           <UsersTab />
+        </Tabs.Panel>
+        <Tabs.Panel value="map">
+          <MapTab />
         </Tabs.Panel>
       </Tabs>
     </Stack>
@@ -773,6 +783,167 @@ function UsersTab() {
           </Group>
         </Stack>
       </Modal>
+    </Stack>
+  );
+}
+
+// -------------------------------------------------------------- wegenkaart
+
+/**
+ * De routecontrole ("mag ik hier fietsen?") werkt op een lokale kopie van de
+ * Nederlandse wegenkaart uit OpenStreetMap. Die haalt de server normaal
+ * vanzelf maandelijks op; hier is te zien hoe oud hij is en kan een beheerder
+ * hem meteen bijwerken.
+ */
+function MapTab() {
+  const [state, setState] = useState<OsmMapStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setState(await api.mapStatus());
+    } catch {
+      // Een mislukte statusopvraging is niet de moeite van een melding waard;
+      // de volgende poging komt vanzelf.
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Tijdens het bijwerken elke twee seconden de voortgang ophalen.
+  const running = state?.job_status === "running";
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => void load(), 2000);
+    return () => window.clearInterval(timer);
+  }, [running, load]);
+
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      setState(await api.refreshMap());
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message:
+          error instanceof ApiError ? error.message : "Bijwerken is niet gelukt.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (state === null) {
+    return (
+      <Center py="xl">
+        <Loader color="routeboek" />
+      </Center>
+    );
+  }
+
+  const age =
+    state.age_days === null
+      ? null
+      : state.age_days < 1
+        ? "vandaag opgehaald"
+        : `${Math.round(state.age_days)} dagen oud`;
+
+  return (
+    <Stack gap="md" maw={640}>
+      <Card withBorder radius="md" padding="lg">
+        <Stack gap="sm">
+          <Group justify="space-between" align="flex-start">
+            <div>
+              <Title order={4}>Wegenkaart van Nederland</Title>
+              <Text size="sm" c="dimmed">
+                Wordt gebruikt om routes te controleren op paden waar fietsen
+                niet mag.
+              </Text>
+            </div>
+            {state.available ? (
+              <Badge color={state.stale ? "orange" : "teal"} variant="light">
+                {state.stale ? "Verouderd" : "Actueel"}
+              </Badge>
+            ) : (
+              <Badge color="red" variant="light">
+                Ontbreekt
+              </Badge>
+            )}
+          </Group>
+
+          {state.available ? (
+            <Group gap="xl">
+              <div>
+                <Text size="xs" c="dimmed">
+                  Wegen
+                </Text>
+                <Text fw={600}>{state.way_count.toLocaleString("nl-NL")}</Text>
+              </div>
+              <div>
+                <Text size="xs" c="dimmed">
+                  Omvang
+                </Text>
+                <Text fw={600}>{Math.round(state.size_mb)} MB</Text>
+              </div>
+              <div>
+                <Text size="xs" c="dimmed">
+                  Leeftijd
+                </Text>
+                <Text fw={600}>{age ?? "onbekend"}</Text>
+              </div>
+            </Group>
+          ) : (
+            <Alert color="orange" variant="light">
+              De kaart is nog niet opgehaald. Tot die tijd kan een route niet
+              op verboden paden worden gecontroleerd.
+            </Alert>
+          )}
+
+          {running && (
+            <Stack gap={6}>
+              <Text size="sm">{state.job_message ?? "Bezig..."}</Text>
+              <Progress
+                value={state.job_progress >= 0 ? state.job_progress * 100 : 100}
+                animated
+                striped={state.job_progress < 0}
+                color="routeboek"
+              />
+            </Stack>
+          )}
+
+          {state.job_status === "error" && (
+            <Alert color="red" variant="light">
+              Het bijwerken is mislukt: {state.job_error ?? "onbekende fout"}
+            </Alert>
+          )}
+
+          {state.job_status === "done" && !running && (
+            <Alert color="teal" variant="light">
+              De kaart is bijgewerkt.
+            </Alert>
+          )}
+
+          <Group>
+            <Button
+              leftSection={<IconRefresh size={16} />}
+              onClick={() => void refresh()}
+              loading={busy || running}
+              variant="light"
+            >
+              Kaart bijwerken
+            </Button>
+          </Group>
+
+          <Text size="xs" c="dimmed">
+            Het bijwerken duurt een paar minuten: er wordt ruim een gigabyte aan
+            kaartgegevens opgehaald en opnieuw geindexeerd. De huidige kaart
+            blijft gewoon werken zolang dat loopt. De server doet dit uit
+            zichzelf zodra de gegevens een maand oud zijn.
+          </Text>
+        </Stack>
+      </Card>
     </Stack>
   );
 }

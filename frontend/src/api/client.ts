@@ -28,6 +28,7 @@ import type {
   User,
   UserSummary,
   LegalityStatus,
+  OsmMapStatus,
   WaterResult,
 } from "./types";
 
@@ -315,6 +316,11 @@ export const api = {
 
   legalityStatus: (routeId: number) =>
     request<LegalityStatus>(`/api/routes/${routeId}/legality`),
+
+  mapStatus: () => request<OsmMapStatus>("/api/admin/map"),
+
+  refreshMap: () =>
+    request<OsmMapStatus>("/api/admin/map/refresh", { method: "POST" }),
 
   // ----------------------------------------------------------- waterpunten
   waterPoints: (routeId: number, radiusM: number) =>

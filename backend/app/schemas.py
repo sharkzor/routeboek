@@ -556,6 +556,22 @@ class LegalityStatusOut(BaseModel):
     report: LegalityReportOut | None = None
 
 
+class OsmMapStatusOut(BaseModel):
+    """Toestand van de lokale wegenkaart, voor de beheerpagina."""
+
+    available: bool
+    way_count: int = 0
+    size_mb: float = 0.0
+    age_days: float | None = None
+    stale: bool = False
+    #: idle | running | done | error
+    job_status: str = "idle"
+    job_message: str | None = None
+    #: -1 wanneer de duur van de huidige stap niet te schatten is.
+    job_progress: float = 0.0
+    job_error: str | None = None
+
+
 # ---------------------------------------------------------------------- admin
 
 

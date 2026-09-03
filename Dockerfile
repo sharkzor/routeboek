@@ -22,6 +22,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# osmium-tool bouwt de lokale wegenkaart op (zie app/services/osm_index.py).
+# Het zware werk daarvan is C++; Python leest alleen het resultaat.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends osmium-tool \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -34,7 +40,7 @@ COPY --from=frontend /build/dist ./app/static
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && useradd --create-home --uid 10001 appuser \
-    && mkdir -p /app/data/cache /app/data/tmp /app/data/media \
+    && mkdir -p /app/data/cache /app/data/tmp /app/data/media /app/data/osm \
     && chown -R appuser:appuser /app
 
 USER appuser

@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.services import osm_index
 from app.routers import (
     admin,
     auth,
@@ -38,6 +39,9 @@ async def lifespan(app: FastAPI):
     )
     settings.ensure_dirs()
     settings.resolve_secret_key()
+    # De wegenkaart voor de routecontrole ontbreekt bij een verse installatie
+    # en veroudert daarna langzaam; dit haalt hem op de achtergrond binnen.
+    osm_index.ensure_fresh_in_background()
     logger.info("%s gestart op poort %s", settings.app_name, settings.port)
     yield
 

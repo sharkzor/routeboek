@@ -26,6 +26,7 @@ from app.routes_common import slugify, track_stats, unique_slug
 from app.schemas import (
     AdminUserUpdateIn,
     Message,
+    OsmMapStatusOut,
     RouteCreateIn,
     RouteDetail,
     RouteSummary,
@@ -33,6 +34,7 @@ from app.schemas import (
     UserOut,
 )
 from app.security import revoke_all_sessions
+from app.services import osm_index
 from app.water import gpx_service
 
 logger = logging.getLogger(__name__)
@@ -299,3 +301,50 @@ def delete_user(
     db.commit()
     logger.info("Gebruiker %s verwijderd door %s", user.email, admin.email)
     return Message(detail="De gebruiker is verwijderd.")
+
+
+# -- Wegenkaart --------------------------------------------------------------
+
+# De routecontrole ("mag ik hier fietsen?") werkt op een lokale kopie van de
+# Nederlandse wegenkaart uit OpenStreetMap. Die wordt normaal vanzelf
+# maandelijks ververst; hier kan een beheerder dat handmatig doen en zien hoe
+# oud de gegevens zijn.
+
+
+def _map_status() -> OsmMapStatusOut:
+    state = osm_index.status()
+    job = osm_index.current_job()
+    return OsmMapStatusOut(
+        available=state.available,
+        way_count=state.way_count,
+        size_mb=state.size_mb,
+        age_days=round(state.age_days, 1) if state.age_days is not None else None,
+        stale=state.stale,
+        job_status=job.state if job is not None else "idle",
+        job_message=job.message if job is not None else None,
+        job_progress=job.progress if job is not None else 0.0,
+        job_error=job.error if job is not None else None,
+    )
+
+
+@router.get("/map", response_model=OsmMapStatusOut)
+def map_status(admin: User = Depends(current_admin)) -> OsmMapStatusOut:
+    return _map_status()
+
+
+@router.post("/map/refresh", response_model=OsmMapStatusOut)
+def refresh_map(admin: User = Depends(current_admin)) -> OsmMapStatusOut:
+    """Haal een verse wegenkaart op.
+
+    Dit duurt een paar minuten en is bewust een achtergrondtaak: de huidige
+    kaart blijft gewoon in gebruik tot de nieuwe helemaal klaar is.
+    """
+    job = osm_index.current_job()
+    if job is not None and job.state == "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="De kaart wordt al bijgewerkt.",
+        )
+    osm_index.start_refresh()
+    logger.info("Wegenkaart handmatig bijgewerkt door %s", admin.email)
+    return _map_status()

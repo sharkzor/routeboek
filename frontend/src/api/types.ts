@@ -354,3 +354,15 @@ export const CATEGORY_LABELS: Record<CategoryCode, string> = {
   high_pace: "Snelle groepen",
   tourist: "Toeristisch",
 };
+
+export interface OsmMapStatus {
+  available: boolean;
+  way_count: number;
+  size_mb: number;
+  age_days: number | null;
+  stale: boolean;
+  job_status: "idle" | "running" | "done" | "error";
+  job_message: string | null;
+  job_progress: number;
+  job_error: string | null;
+}
