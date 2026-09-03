@@ -39,6 +39,10 @@ class LocalProjection:
     ) -> list[tuple[float, float]]:
         return [self.to_xy(lat, lon) for lat, lon in points]
 
+    def to_latlon(self, x: float, y: float) -> tuple[float, float]:
+        """De omgekeerde van `to_xy`."""
+        return (y / self._my + self.lat0, x / self._mx + self.lon0)
+
 
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Afstand in meters tussen twee coordinaten."""

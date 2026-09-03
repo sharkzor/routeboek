@@ -52,15 +52,30 @@ logger = logging.getLogger(__name__)
 # -- Afstemming --------------------------------------------------------------
 
 #: Corridorbreedte: wegen binnen zoveel meter van de routelijn halen we op.
-CORRIDOR_RADIUS_M = 30
+#: Ruim boven ALLOWED_NEARBY_M, met marge voor de vereenvoudiging hieronder.
+CORRIDOR_RADIUS_M = 35
 
-#: Punten per Overpass-verzoek. Gemeten: 100 punten kost ~3 s, 150 punten
-#: ineens ~24 s. De querytijd loopt daarboven hard op.
-MAX_CHUNK_VERTICES = 100
+#: Zoveel meter mag de lijn die we naar Overpass sturen van de echte route
+#: afwijken. Overpass vat een `around` met meerdere coördinaten op als een
+#: polyline, niet als losse punten, dus op een recht stuk zijn twee punten
+#: genoeg. Vereenvoudigen (Douglas-Peucker) scheelt daardoor ruim de helft
+#: van de punten zonder dat de corridor smaller wordt.
+SIMPLIFY_TOLERANCE_M = 5.0
 
-#: De routelijn wordt hiertoe uitgedund; fijner heeft voor een corridor van
-#: 30 m geen zin en maakt de query alleen maar zwaarder.
-MIN_VERTEX_SPACING_M = 50.0
+#: Corridorlengte per Overpass-verzoek. De echte kostenfactor is niet de
+#: lengte maar het aantal wegen in de corridor, en dat scheelt een orde van
+#: grootte tussen polder en stad: 10 km door het IJsselmeergebied kost ~4 s,
+#: dezelfde 10 km rond Utrecht loopt op élke instance in een 504. We beginnen
+#: daarom ruim en halveren een blok dat niet lukt (`_fetch_chunk_adaptive`),
+#: zodat we in leeg gebied weinig verzoeken doen en in de stad vanzelf fijner
+#: werken.
+MAX_CHUNK_KM = 8.0
+
+#: Onder deze lengte heeft verder opdelen geen zin meer.
+MIN_CHUNK_KM = 1.0
+
+#: Harde bovengrens per verzoek, voor het geval een stuk extreem bochtig is.
+MAX_CHUNK_VERTICES = 120
 
 #: Opgehaalde blokken blijven een maand bruikbaar; OSM verandert langzaam genoeg.
 CACHE_TTL_SECONDS = 30 * 86400
@@ -87,7 +102,14 @@ MIN_SEGMENT_POINTS = 3
 GAP_TOLERANCE = 2
 
 #: Ophogen zodra de regels of de tegelquery wijzigen; verouderde cache vervalt.
-RULESET_VERSION = 1
+RULESET_VERSION = 2
+
+#: Kort houden: een geslaagde query duurt seconden, geen minuten.
+OVERPASS_TIMEOUT_S = 45
+OVERPASS_ATTEMPTS = 4
+
+#: De publieke Overpass geeft elk IP twee gelijktijdige plekken.
+OVERPASS_CONCURRENCY = 2
 
 OVERPASS_ENDPOINTS = (
     "https://overpass-api.de/api/interpreter",
@@ -218,17 +240,15 @@ class Report:
 # -- Overpass ----------------------------------------------------------------
 
 
-def decimate(points: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Dun de routelijn uit tot punten van minstens MIN_VERTEX_SPACING_M uit elkaar."""
-    if not points:
-        return []
-    out = [points[0]]
-    for lat, lon in points[1:]:
-        if haversine_m(out[-1][0], out[-1][1], lat, lon) >= MIN_VERTEX_SPACING_M:
-            out.append((lat, lon))
-    if out[-1] != tuple(points[-1]):
-        out.append(tuple(points[-1]))
-    return out
+def simplify_line(
+    points: Sequence[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    """Vereenvoudig de routelijn met Douglas-Peucker, in meters."""
+    if len(points) < 3:
+        return [tuple(p) for p in points]
+    projection = LocalProjection.from_points(points)
+    line = LineString(projection.to_xy_many(points)).simplify(SIMPLIFY_TOLERANCE_M)
+    return [projection.to_latlon(x, y) for x, y in line.coords]
 
 
 def corridor_chunks(
@@ -238,28 +258,48 @@ def corridor_chunks(
 
     De stukken overlappen één punt, zodat de corridor aaneengesloten blijft.
     """
-    line = decimate(points)
+    line = simplify_line(points)
     if len(line) < 2:
         return []
+
     chunks: list[list[tuple[float, float]]] = []
-    index = 0
-    while index < len(line) - 1:
-        end = min(index + MAX_CHUNK_VERTICES, len(line))
-        chunks.append(line[index:end])
-        index = end - 1
+    current: list[tuple[float, float]] = [line[0]]
+    length = 0.0
+    for previous, point in zip(line, line[1:]):
+        length += haversine_m(previous[0], previous[1], point[0], point[1])
+        current.append(point)
+        if length >= MAX_CHUNK_KM * 1000 or len(current) >= MAX_CHUNK_VERTICES:
+            chunks.append(current)
+            current = [point]
+            length = 0.0
+    if len(current) > 1:
+        chunks.append(current)
     return chunks
 
 
-def _overpass(query: str, timeout: int = 120) -> dict:
-    """Voer een Overpass-query uit, met uitwijk naar een andere instance.
+class OverpassBusy(RuntimeError):
+    """De instance wil even niet (rate limit). Wachten helpt."""
 
-    De publieke instances geven bij drukte 429 (te veel verzoeken) of 504.
-    Beide zijn tijdelijk, dus we wisselen van server en wachten steeds langer.
+
+class OverpassTooHeavy(RuntimeError):
+    """De query is te zwaar voor de server. Alleen kleiner maken helpt."""
+
+
+def _overpass(query: str, timeout: int = OVERPASS_TIMEOUT_S) -> dict:
+    """Voer een Overpass-query uit langs de beschikbare instances.
+
+    Het onderscheid tussen de twee foutsoorten is belangrijk voor de snelheid:
+    een 429 gaat over ons (te veel verzoeken, even wachten), een 504 of een
+    read-timeout gaat over de query (te zwaar; dan is nog eens proberen puur
+    tijdverlies en moet de corridor kleiner). De timeout is bewust kort — een
+    geslaagde query is in enkele seconden klaar.
     """
     settings = get_settings()
+    heavy = 0
+    busy = 0
     last: Exception | None = None
-    for attempt in range(len(OVERPASS_ENDPOINTS) * 2):
-        endpoint = OVERPASS_ENDPOINTS[attempt % len(OVERPASS_ENDPOINTS)]
+
+    for endpoint in OVERPASS_ENDPOINTS:
         try:
             response = requests.post(
                 endpoint,
@@ -267,15 +307,27 @@ def _overpass(query: str, timeout: int = 120) -> dict:
                 timeout=timeout,
                 headers={"User-Agent": settings.user_agent},
             )
-            if response.status_code in (429, 502, 503, 504):
-                raise RuntimeError(f"{endpoint} gaf {response.status_code}")
+            if response.status_code == 429:
+                raise OverpassBusy(f"{endpoint} gaf 429")
+            if response.status_code in (502, 503, 504):
+                raise OverpassTooHeavy(f"{endpoint} gaf {response.status_code}")
             response.raise_for_status()
             return response.json()
-        except Exception as exc:  # noqa: BLE001 - elke fout is reden om uit te wijken
+        except OverpassBusy as exc:
+            busy += 1
             last = exc
-            logger.warning("Overpass %s mislukt: %s", endpoint, exc)
-            time.sleep(min(20.0, 2.0 * (attempt + 1)))
-    raise RuntimeError(f"Geen enkele Overpass-instance reageerde: {last}")
+        except requests.Timeout as exc:
+            heavy += 1
+            last = exc
+        except Exception as exc:  # noqa: BLE001 - overige fouten: volgende proberen
+            if isinstance(exc, OverpassTooHeavy):
+                heavy += 1
+            last = exc
+        logger.warning("Overpass %s mislukt: %s", endpoint, last)
+
+    if heavy and not busy:
+        raise OverpassTooHeavy(str(last))
+    raise OverpassBusy(str(last))
 
 
 def _prune(elements: Iterable[dict]) -> list[dict]:
@@ -335,6 +387,42 @@ def _fetch_chunk(chunk: Sequence[tuple[float, float]]) -> list[Way]:
         json.dump(pruned, handle, separators=(",", ":"))
     tmp.replace(path)
     return [Way(w["id"], w["t"], [tuple(c) for c in w["g"]]) for w in pruned]
+
+
+def _chunk_length_km(chunk: Sequence[tuple[float, float]]) -> float:
+    return (
+        sum(haversine_m(a[0], a[1], b[0], b[1]) for a, b in zip(chunk, chunk[1:]))
+        / 1000.0
+    )
+
+
+def _split(chunk: Sequence[tuple[float, float]]) -> list[list[tuple[float, float]]]:
+    """Halveer een blok, met één punt overlap zodat de corridor aaneengesloten blijft."""
+    if len(chunk) < 4:
+        return []
+    middle = len(chunk) // 2
+    return [list(chunk[: middle + 1]), list(chunk[middle:])]
+
+
+def _fetch_chunk_adaptive(chunk: Sequence[tuple[float, float]]) -> list[Way]:
+    """Haal een blok op; is het te zwaar, dan in twee helften opnieuw."""
+    for attempt in range(OVERPASS_ATTEMPTS):
+        try:
+            return _fetch_chunk(chunk)
+        except OverpassTooHeavy as exc:
+            halves = _split(chunk) if _chunk_length_km(chunk) > MIN_CHUNK_KM else []
+            if not halves:
+                raise
+            logger.info("Corridorblok te zwaar (%s); in tweeën gedeeld", exc)
+            ways: list[Way] = []
+            for half in halves:
+                ways.extend(_fetch_chunk_adaptive(half))
+            return ways
+        except OverpassBusy:
+            if attempt == OVERPASS_ATTEMPTS - 1:
+                raise
+            time.sleep(min(10.0, 3.0 * (attempt + 1)))
+    return []
 
 
 def sample_route(
@@ -486,22 +574,28 @@ def check_route(
     report_progress(0.02, "Kaartgegevens ophalen")
 
     ways: list[Way] = []
-    failed = 0
-    # Bewust één voor één. Twee gelijktijdige corridorqueries leverden bij de
-    # publieke Overpass structureel 429- en 504-antwoorden op, waardoor de
-    # controle juist trager werd dan wanneer we netjes op onze beurt wachten.
-    for done, chunk in enumerate(chunks, start=1):
-        try:
-            ways.extend(_fetch_chunk(chunk))
-        except Exception as exc:  # noqa: BLE001
-            failed += 1
-            logger.warning("Corridorblok mislukt: %s", exc)
-        report_progress(
-            0.02 + 0.84 * (done / len(chunks)),
-            f"Kaartgegevens ophalen ({done}/{len(chunks)})",
-        )
-    if failed and failed >= len(chunks) / 2:
-        raise RuntimeError("Te veel kaartgegevens konden niet worden opgehaald.")
+    done = 0
+
+    def fetch(chunk: list[tuple[float, float]]) -> list[Way]:
+        return _fetch_chunk_adaptive(chunk)
+
+    # Twee tegelijk: precies wat de publieke Overpass per IP toestaat
+    # ("Rate limit: 2" in /api/status).
+    #
+    # Een blok dat definitief niet lukt is een harde fout, geen detail dat we
+    # mogen negeren. Missen we de kaartgegevens van een stuk route, dan zouden
+    # we daar "geen verboden paden" melden terwijl we simpelweg niet gekeken
+    # hebben — precies het antwoord waar je niets aan hebt. De geslaagde
+    # blokken staan in de cache, dus een nieuwe poging is goedkoop en vult
+    # alleen de ontbrekende stukken aan.
+    with ThreadPoolExecutor(max_workers=OVERPASS_CONCURRENCY) as pool:
+        for result in pool.map(fetch, chunks):
+            ways.extend(result)
+            done += 1
+            report_progress(
+                0.02 + 0.84 * (done / len(chunks)),
+                f"Kaartgegevens ophalen ({done}/{len(chunks)})",
+            )
 
     # Eén weg kan in meerdere blokken voorkomen.
     unique: dict[int, Way] = {way.id: way for way in ways}

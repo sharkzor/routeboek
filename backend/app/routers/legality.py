@@ -78,7 +78,11 @@ def _status(key: str) -> LegalityStatusOut:
         return LegalityStatusOut(
             status="error",
             progress=job.progress,
-            error="De kaartgegevens zijn nu niet bereikbaar. Probeer het later opnieuw.",
+            error=(
+                "De kaartdienst van OpenStreetMap is op dit moment overbelast en "
+                "weigert verzoeken. Probeer het over een kwartier opnieuw; de al "
+                "opgehaalde delen blijven bewaard, dus een nieuwe poging is sneller."
+            ),
         )
     report = legality.load_cached(key)
     if report is not None:

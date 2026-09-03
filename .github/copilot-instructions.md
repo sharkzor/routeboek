@@ -494,25 +494,49 @@ waar fietsen niet (zonder meer) mag. Alleen bedoeld voor Nederland.
 - **Bron: OpenStreetMap via de Overpass API.** Geen API-sleutel, geen
   registratie, en voor Nederland zeer nauwkeurig getagd op toegankelijkheid.
   Er is geen officiële overheidsdataset die dit landsdekkend en gratis biedt.
-- **De route wordt in blokken van 100 punten opgevraagd** met een
-  corridorquery (`way["highway"](around:30, <polyline>)`). Dit is duur
-  uitgezocht; de valkuilen niet opnieuw onderzoeken:
+- **Waar de tijd zit (gemeten, niet gegokt):** de eigen verwerking van een
+  route kost **0,3 s**. Alle wachttijd komt van Overpass. Een geslaagde
+  corridorquery duurt 2-5 s; de uitschieters komen door mislukte pogingen.
+  Optimaliseer dus niets aan de matching — daar valt niets te halen.
+- **De publieke Overpass is de bottleneck én een risico.** Tijdens het
+  ontwikkelen is dit IP door alle drie de instances geblokkeerd (`overpass-
+  api.de` weigerde de verbinding, de andere gaven 429 op zelfs `/api/status`).
+  De gratis instances zijn niet bedoeld voor deze belasting. Wie hieraan
+  verder werkt: ga niet harder queryen, dat maakt het erger.
+- **De route wordt in blokken opgevraagd** met een corridorquery
+  (`way["highway"](around:35, <polyline>)`). Duur uitgezochte valkuilen, niet
+  opnieuw onderzoeken:
+  - `around` met meerdere coördinaten is een **polyline**, geen losse punten.
+    Op een recht stuk zijn dus twee punten genoeg. De lijn wordt daarom met
+    Douglas-Peucker vereenvoudigd (`SIMPLIFY_TOLERANCE_M`, 5 m), wat ruim de
+    helft van de punten scheelt zonder de corridor te versmallen.
   - De hele route in één `around` werkt niet: 300+ punten draait ruim twee
-    minuten en geeft dan *nul* resultaten terug.
-  - Boven ~100 punten per blok loopt de querytijd hard op (gemeten: 100
-    punten ~3 s, 150 punten ~24 s).
+    minuten en geeft dan *nul* resultaten.
   - Het tagfilter moet **in** de `around`/bbox-query staan. Eerst alles
     ophalen en daarna filteren (`way(around:...)->.w; way.w[...]`) loopt bij
     elke grootte in een timeout, want dan kan Overpass zijn index niet
-    gebruiken. Om dezelfde reden krijgt elke `bicycle=`/`access=`-clausule
-    er `["highway"]` bij, anders volgt een 504.
+    gebruiken. Om dezelfde reden krijgt elke `bicycle=`/`access=`-clausule er
+    `["highway"]` bij, anders volgt een 504.
   - Een eerdere versie deelde het gebied op in vaste kaartvakken van ~2,8 km.
-    Die is verworpen: hij haalt de hele omgeving op in plaats van alleen de
-    corridor en was ruim vijf keer zo traag. Niet opnieuw invoeren.
-  - **Eén verzoek tegelijk.** Twee gelijktijdige corridorqueries leverden bij
-    de publieke instances structureel 429/504 op, waardoor het geheel juist
-    trager werd. `_overpass()` wisselt bij fouten van instance en wacht
-    steeds langer.
+    Verworpen: die haalt de hele omgeving op in plaats van alleen de corridor
+    en was ruim vijf keer zo traag. Niet opnieuw invoeren.
+- **Blokgrootte is adaptief, en dat moet ook.** De kostenfactor is niet de
+  lengte maar het aantal wegen in de corridor, en dat scheelt een orde van
+  grootte tussen polder en stad: 10 km door het IJsselmeergebied kost ~4 s,
+  dezelfde 10 km rond Utrecht loopt op élke instance in een 504. We beginnen
+  op `MAX_CHUNK_KM` (8 km) en `_fetch_chunk_adaptive()` halveert een blok dat
+  te zwaar blijkt. Een vaste blokgrootte werkt dus niet voor heel Nederland.
+- **Onderscheid 429 van 504.** Een 429 gaat over ons (te veel verzoeken →
+  wachten helpt), een 504 of read-timeout gaat over de query (te zwaar →
+  alleen opdelen helpt). Ze hetzelfde behandelen kostte ooit 196 s voor één
+  blok, omdat we drie keer een timeout van 120 s afwachtten. De HTTP-timeout
+  staat daarom op 45 s: een geslaagde query is in seconden klaar.
+- **Een mislukt blok is een harde fout, geen detail.** Eerder werden fouten
+  geslikt zolang minder dan de helft van de blokken faalde. Gevolg: een route
+  die eerst 5 overtredingen gaf, meldde er stilletjes nog maar 2 — we hadden
+  daar simpelweg niet gekeken. Voor deze feature is een onvolledig "niets
+  gevonden" het gevaarlijkste antwoord dat er is. Geslaagde blokken staan in
+  de cache, dus opnieuw proberen is goedkoop en vult de gaten aan.
 - **We halen bewust álle wegen op, niet alleen de problematische.** Zonder de
   toegestane wegen ernaast is niet vast te stellen of een melding echt is.
   Dat scheelt bovendien niets in snelheid: `way["highway"]` bleek sneller dan
