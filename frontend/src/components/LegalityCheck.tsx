@@ -114,7 +114,7 @@ export function LegalityResults({
           striped
         />
         <Text size="xs" c="dimmed">
-          De kaartgegevens komen van OpenStreetMap. De eerste controle van een route duurt een paar minuten; daarna is het resultaat meteen beschikbaar.
+          De kaartgegevens komen van OpenStreetMap.
         </Text>
       </Stack>
     );

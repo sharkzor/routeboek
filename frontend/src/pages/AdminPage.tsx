@@ -798,6 +798,9 @@ function UsersTab() {
 function MapTab() {
   const [state, setState] = useState<OsmMapStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  // De server onthoudt de laatste taak, ook nadat die klaar is. Zonder dit
+  // zou "de kaart is bijgewerkt" bij elk bezoek opnieuw in beeld staan.
+  const [justFinished, setJustFinished] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -822,6 +825,7 @@ function MapTab() {
 
   const refresh = async () => {
     setBusy(true);
+    setJustFinished(true);
     try {
       setState(await api.refreshMap());
     } catch (error) {
@@ -919,7 +923,7 @@ function MapTab() {
             </Alert>
           )}
 
-          {state.job_status === "done" && !running && (
+          {state.job_status === "done" && !running && justFinished && (
             <Alert color="teal" variant="light">
               De kaart is bijgewerkt.
             </Alert>
@@ -938,7 +942,7 @@ function MapTab() {
 
           <Text size="xs" c="dimmed">
             Het bijwerken duurt een paar minuten: er wordt ruim een gigabyte aan
-            kaartgegevens opgehaald en opnieuw geindexeerd. De huidige kaart
+            kaartgegevens opgehaald en opnieuw geïndexeerd. De huidige kaart
             blijft gewoon werken zolang dat loopt. De server doet dit uit
             zichzelf zodra de gegevens een maand oud zijn.
           </Text>

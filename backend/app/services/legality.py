@@ -82,7 +82,7 @@ MIN_SEGMENT_POINTS = 3
 GAP_TOLERANCE = 2
 
 #: Ophogen zodra de regels of de tegelquery wijzigen; verouderde cache vervalt.
-RULESET_VERSION = 2
+RULESET_VERSION = 3
 
 # -- Regels ------------------------------------------------------------------
 
@@ -187,7 +187,7 @@ class Report:
     warning_count: int
     segments: list[Segment]
     checked_at: float = field(default_factory=time.time)
-    source: str = "OpenStreetMap (Overpass)"
+    source: str = "OpenStreetMap"
 
 
 # -- Wegen ophalen -----------------------------------------------------------
