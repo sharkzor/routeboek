@@ -15,6 +15,7 @@ import type {
   Ride,
   RideDefaults,
   RideInput,
+  RidePage,
   RideWeather,
   RouteDetail,
   MarkResult,
@@ -282,6 +283,8 @@ export const api = {
   members: () => request<UserSummary[]>("/api/users"),
   rides: (includePast = false, mine = false) =>
     request<Ride[]>("/api/rides" + query({ include_past: includePast, mine })),
+  ridesHistory: (params: { search?: string; mine?: boolean; page?: number; page_size?: number }) =>
+    request<RidePage>("/api/rides/history" + query(params)),
   // `key` is de sleutel uit een gedeelde link naar een prive-rit; de server
   // legt de ontvanger daarmee vast als genodigde.
   ride: (id: number, key?: string | null) =>

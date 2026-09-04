@@ -6,7 +6,7 @@ import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
@@ -18,6 +18,7 @@ from app.schemas import (
     RideCreateIn,
     RideDefaults,
     RideOut,
+    RidePage,
     RideRouteRef,
     RideUpdateIn,
     RideWeatherOut,
@@ -132,6 +133,30 @@ def list_rides(
         joined = select(RideParticipant.ride_id).where(RideParticipant.user_id == user.id)
         stmt = stmt.where((Ride.owner_id == user.id) | (Ride.id.in_(joined)))
     return [_to_out(ride, user) for ride in db.scalars(stmt).unique().all()]
+
+
+@router.get("/history", response_model=RidePage)
+def rides_history(
+    search: str | None = Query(default=None),
+    mine: bool = Query(default=False),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> RidePage:
+    """Verstreken ritten, meest recente eerst; met zoekterm, "alleen mijn
+    ritten"-filter en paginering (een clubgeschiedenis van jaren mag niet in
+    één keer opgehaald hoeven worden)."""
+    stmt = ride_service.history_rides_query(user, mine=mine, search=search)
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery()))
+    page_stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    rides = db.scalars(page_stmt).unique().all()
+    return RidePage(
+        items=[_to_out(ride, user) for ride in rides],
+        total=total or 0,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/{ride_id}", response_model=RideOut)

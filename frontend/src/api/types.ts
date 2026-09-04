@@ -147,6 +147,13 @@ export interface Ride {
   posted_to_telegram: boolean;
 }
 
+export interface RidePage {
+  items: Ride[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface RideDefaults {
   ride_date: string;
   ride_time: string;

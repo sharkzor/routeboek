@@ -378,6 +378,13 @@ class RideOut(BaseModel):
     posted_to_telegram: bool = False
 
 
+class RidePage(BaseModel):
+    items: list[RideOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class TelegramLinkOut(BaseModel):
     link: str
     expires_in_minutes: int

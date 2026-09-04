@@ -7,19 +7,22 @@ import {
   Button,
   Card,
   Center,
+  Checkbox,
   Collapse,
   Group,
   List,
   Loader,
   Menu,
+  Pagination,
   SegmentedControl,
   Stack,
   Text,
+  TextInput,
   Title,
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
+import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconBrandTelegram,
@@ -34,6 +37,7 @@ import {
   IconMapPin,
   IconPencil,
   IconRoute,
+  IconSearch,
   IconShare2,
   IconTrash,
   IconUser,
@@ -57,7 +61,9 @@ import {
 
 dayjs.locale("nl");
 
-type Scope = "upcoming" | "mine" | "past";
+type Scope = "upcoming" | "mine" | "history";
+
+const HISTORY_PAGE_SIZE = 10;
 
 export default function RidesPage() {
   const { user } = useAuth();
@@ -74,6 +80,18 @@ export default function RidesPage() {
     Record<number, { loading: boolean; hours: WeatherHour[] | null }>
   >({});
   const [sharing, setSharing] = useState<Set<number>>(new Set());
+
+  const [historySearch, setHistorySearch] = useState("");
+  const [debouncedHistorySearch] = useDebouncedValue(historySearch, 300);
+  const [historyMineOnly, setHistoryMineOnly] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+
+  // Nieuwe zoekterm of filter: begin weer bij de eerste pagina.
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [debouncedHistorySearch, historyMineOnly]);
+
 
   const toggleExpanded = (rideId: number) => {
     setExpanded((prev) => {
@@ -154,15 +172,26 @@ export default function RidesPage() {
   const load = useCallback(async () => {
     setRides(null);
     try {
-      const response = await api.rides(scope === "past", scope === "mine");
-      setRides(scope === "past" ? [...response].reverse() : response);
+      if (scope === "history") {
+        const response = await api.ridesHistory({
+          search: debouncedHistorySearch.trim() || undefined,
+          mine: historyMineOnly,
+          page: historyPage,
+          page_size: HISTORY_PAGE_SIZE,
+        });
+        setRides(response.items);
+        setHistoryTotal(response.total);
+      } else {
+        const response = await api.rides(false, scope === "mine");
+        setRides(response);
+      }
       setError(null);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Ritten laden is mislukt.",
       );
     }
-  }, [scope]);
+  }, [scope, debouncedHistorySearch, historyMineOnly, historyPage]);
 
   useEffect(() => {
     void load();
@@ -226,21 +255,38 @@ export default function RidesPage() {
         data={[
           { value: "upcoming", label: isMobile ? "Komend" : "Komende ritten" },
           { value: "mine", label: isMobile ? "Mijn" : "Mijn ritten" },
-          {
-            value: "past",
-            label: isMobile ? "Alles" : "Alle (incl. verleden)",
-          },
+          { value: "history", label: "Historie" },
         ]}
         color="routeboek"
         fullWidth={isMobile}
         w={isMobile ? undefined : "fit-content"}
       />
 
+      {scope === "history" && (
+        <Group align="flex-end" wrap="wrap" gap="sm">
+          <TextInput
+            placeholder="Zoek op ritnaam, route of wegkapitein"
+            leftSection={<IconSearch size={16} />}
+            value={historySearch}
+            onChange={(event) => setHistorySearch(event.currentTarget.value)}
+            style={{ flex: 1, minWidth: 220 }}
+          />
+          <Checkbox
+            label="Alleen mijn ritten"
+            checked={historyMineOnly}
+            onChange={(event) =>
+              setHistoryMineOnly(event.currentTarget.checked)
+            }
+          />
+        </Group>
+      )}
+
       {error && (
         <Alert color="red" variant="light">
           {error}
         </Alert>
       )}
+
 
       {rides === null ? (
         <Center py="xl">
@@ -249,14 +295,20 @@ export default function RidesPage() {
       ) : rides.length === 0 ? (
         <Card withBorder radius="md" p="xl">
           <Stack align="center" gap="xs">
-            <Text c="dimmed">Er staan nog geen ritten gepland.</Text>
-            <Button
-              variant="light"
-              color="routeboek"
-              onClick={() => navigate("/ritten/nieuw")}
-            >
-              Organiseer de eerste rit
-            </Button>
+            <Text c="dimmed">
+              {scope === "history"
+                ? "Geen ritten gevonden."
+                : "Er staan nog geen ritten gepland."}
+            </Text>
+            {scope !== "history" && (
+              <Button
+                variant="light"
+                color="routeboek"
+                onClick={() => navigate("/ritten/nieuw")}
+              >
+                Organiseer de eerste rit
+              </Button>
+            )}
           </Stack>
         </Card>
       ) : (
@@ -629,6 +681,20 @@ export default function RidesPage() {
             );
           })}
         </Stack>
+      )}
+
+      {scope === "history" && rides !== null && historyTotal > HISTORY_PAGE_SIZE && (
+        <Center>
+          <Pagination
+            total={Math.ceil(historyTotal / HISTORY_PAGE_SIZE)}
+            value={historyPage}
+            onChange={(next) => {
+              setHistoryPage(next);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            color="routeboek"
+          />
+        </Center>
       )}
     </Stack>
   );

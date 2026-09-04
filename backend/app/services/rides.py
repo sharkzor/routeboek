@@ -10,7 +10,7 @@ import secrets
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.models import Ride, RideGuest, RideParticipant, Route, User
 
@@ -47,6 +47,25 @@ def default_ride_name(route: Route | None) -> str:
     return route.name if route is not None else "Clubrit"
 
 
+def _apply_visibility(stmt, user: User):
+    """Beperkt een ritten-select tot wat deze gebruiker mag zien (zie
+    `visible_rides_query`-docstring); gedeeld door de verschillende
+    ritten-overzichten (aankomend, mijn ritten, historie)."""
+    if not user.is_admin:
+        joined = select(RideParticipant.ride_id).where(RideParticipant.user_id == user.id)
+        invited = select(RideGuest.ride_id).where(RideGuest.user_id == user.id)
+        stmt = stmt.where(
+            or_(
+                Ride.is_private.is_(False),
+                Ride.owner_id == user.id,
+                Ride.created_by_id == user.id,
+                Ride.id.in_(joined),
+                Ride.id.in_(invited),
+            )
+        )
+    return stmt
+
+
 def visible_rides_query(user: User, include_past: bool = False):
     """Ritten die deze gebruiker mag zien.
 
@@ -66,18 +85,48 @@ def visible_rides_query(user: User, include_past: bool = False):
     if not include_past:
         stmt = stmt.where(Ride.ride_date >= date.today())
 
-    if not user.is_admin:
+    return _apply_visibility(stmt, user)
+
+
+def history_rides_query(user: User, mine: bool = False, search: str | None = None):
+    """Alleen de verstreken ritten, meest recente eerst.
+
+    Los van `visible_rides_query` gehouden omdat de historie een eigen
+    sortering (nieuwste eerst i.p.v. eerstvolgende eerst), een eigen
+    "mijn ritten"-filter en een zoekterm heeft — functies die het
+    aankomende overzicht niet nodig heeft.
+    """
+    stmt = (
+        select(Ride)
+        .options(
+            selectinload(Ride.owner),
+            selectinload(Ride.route),
+            selectinload(Ride.participants).selectinload(RideParticipant.user),
+        )
+        .where(Ride.ride_date < date.today())
+        .order_by(Ride.ride_date.desc(), Ride.ride_time.desc())
+    )
+    stmt = _apply_visibility(stmt, user)
+
+    if mine:
         joined = select(RideParticipant.ride_id).where(RideParticipant.user_id == user.id)
-        invited = select(RideGuest.ride_id).where(RideGuest.user_id == user.id)
-        stmt = stmt.where(
-            or_(
-                Ride.is_private.is_(False),
-                Ride.owner_id == user.id,
-                Ride.created_by_id == user.id,
-                Ride.id.in_(joined),
-                Ride.id.in_(invited),
+        stmt = stmt.where((Ride.owner_id == user.id) | (Ride.id.in_(joined)))
+
+    if search:
+        pattern = f"%{search.strip()}%"
+        owner = aliased(User)
+        stmt = (
+            stmt.join(owner, Ride.owner_id == owner.id)
+            .outerjoin(Route, Ride.route_id == Route.id)
+            .where(
+                or_(
+                    Ride.name.ilike(pattern),
+                    Route.name.ilike(pattern),
+                    owner.display_name.ilike(pattern),
+                )
             )
         )
+
     return stmt
 
 

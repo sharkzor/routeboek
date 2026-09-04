@@ -376,6 +376,32 @@ het voorbeeld van het oude routeboek (`rit2.png`):
   sticky; top: 0`, zodat de miniatuur bij een lange uitklap in beeld blijft).
   Op mobiel speelt dit niet: daar heeft de `img` een vaste hoogte van 165px.
 
+### Ritten-overzicht: Komend / Mijn / Historie
+Drie tabs (`SegmentedControl` in `RidesPage.tsx`): "Komende ritten" en "Mijn
+ritten" tonen simpelweg alle (voor dit lid zichtbare) toekomstige ritten via
+`GET /api/rides`, ongepagineerd — dat blijft altijd een kleine lijst. Een
+eerdere vierde tab "Alle (incl. verleden)" voegde weinig toe naast "Komende
+ritten" en is vervangen door **Historie**, met een eigen endpoint
+(`GET /api/rides/history`, `services/rides.py:history_rides_query()`):
+
+- **Alleen verstreken ritten**, nieuwste eerst (`ride_date desc, ride_time
+  desc`) — het omgekeerde van de sortering bij "Komende ritten", want bij
+  historie is de recentste rit het interessantst, niet de eerstvolgende.
+- **Zoekveld** (`search`, gedebouncet met `useDebouncedValue`) matcht op
+  ritnaam, routenaam én de naam van de wegkapitein (`ilike`, met een `join`
+  op `User` via een `aliased()`-alias omdat `Ride.owner` al de FK is die de
+  zichtbaarheidscontrole gebruikt).
+- **"Alleen mijn ritten"-checkbox** (`mine`) is een apart, simpel filter
+  (eigenaar of deelnemer) — losstaand van de zoekterm, allebei tegelijk te
+  gebruiken.
+- **Servergepagineerd** (`page`/`page_size`, standaard 10 per pagina,
+  `RidePage`-schema net als het bestaande `RoutePage`-patroon voor routes).
+  Een jarenlange clubgeschiedenis mag nooit in één keer worden opgehaald;
+  vandaar ook geen client-side "toon alles"-optie.
+- Dezelfde ritkaart-rendering wordt hergebruikt; in historie is elke rit per
+  definitie "Geweest" en verdwijnt de aan-/afmeldknop (die logica bestond al
+  via de bestaande `past`-berekening per rit).
+
 ### Weerbericht bij een rit
 Elke rit met een gekoppelde route toont optioneel een uurlijkse
 weersverwachting (`app/services/weather.py`, endpoint

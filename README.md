@@ -26,7 +26,9 @@ Productie: <https://routeboek.unencrypted.nl>
   (woensdag 19:00 / zondag 10:00), weerbericht per rit (temperatuur,
   windrichting/-kracht in Beaufort, neerslag), een eigen rit-detailpagina,
   en een deelknop die een kant-en-klaar WhatsApp/Telegram-bericht met link
-  naar de rit op het klembord zet
+  naar de rit op het klembord zet. Een aparte **historie**-tab toont
+  verstreken ritten (zoekbaar, filterbaar op "alleen mijn ritten",
+  gepagineerd)
 - **Privé-ritten**: verschijnen niet in het standaardoverzicht, maar zijn via
   een deelbare link (met sleutel) alsnog voor genodigden te openen en blijven
   daarna voor hen zichtbaar, ook na afmelden
