@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     telegram_bot_username: str = "stampersrouteboek_bot"
     #: Chat-id van het kanaal waar nieuwe (niet-prive) ritten in gepost worden.
     telegram_channel_id: str = ""
+    #: Publieke uitnodigingslink (bv. https://t.me/+... of https://t.me/naam)
+    #: naar hetzelfde kanaal, alleen om aan leden te tonen op de infopagina.
+    #: De chat-id hierboven is intern (voor de Bot-API) en niet klikbaar.
+    telegram_channel_invite_link: str = ""
     #: Gecontroleerd op elk binnenkomend webhook-verzoek (header
     #: X-Telegram-Bot-Api-Secret-Token), zodat alleen Telegram zelf ons kan
     #: aanroepen op dit ene ongeauthenticeerde endpoint.

@@ -27,10 +27,14 @@ router = APIRouter(prefix="/api/telegram", tags=["telegram"])
 
 @router.get("/status", response_model=TelegramStatusOut)
 def telegram_status(user: User = Depends(current_user)) -> TelegramStatusOut:
+    settings = get_settings()
     return TelegramStatusOut(
         linked=user.telegram_chat_id is not None,
         username=user.telegram_username,
         linked_at=user.telegram_linked_at,
+        enabled=settings.telegram_enabled,
+        bot_username=settings.telegram_bot_username if settings.telegram_enabled else None,
+        channel_invite_link=settings.telegram_channel_invite_link or None,
     )
 
 

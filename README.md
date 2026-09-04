@@ -51,7 +51,9 @@ Productie: <https://routeboek.unencrypted.nl>
   clubkanaal geplaatst (bewerken/annuleren werkt het bestaande
   kanaalbericht bij), en de wegkapitein ontvangt vlak voor vertrek een
   Telegram-DM met de deelnemerslijst. Koppelen via "Mijn account" (geen
-  telefoonnummer nodig, alleen een `/start`-deeplink naar de bot)
+  telefoonnummer nodig, alleen een `/start`-deeplink naar de bot); een
+  eigen **infopagina** (`/informatie`) legt dit uit aan leden en linkt naar
+  het kanaal
 
 ## Techniek
 
@@ -105,9 +107,12 @@ Vul in `.env` in ieder geval in:
   niet de verificatiemail ontvangen
 - `APP_UID` / `APP_GID` — uitkomst van `id -u` en `id -g`, zodat de container
   in `./data` mag schrijven
-- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHANNEL_ID` / `TELEGRAM_WEBHOOK_SECRET` —
-  optioneel; zonder bot-token blijft de Telegram-integratie stil uitgeschakeld
-  (geen ritten in een kanaal, geen deelnemersreminder)
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHANNEL_ID` / `TELEGRAM_CHANNEL_INVITE_LINK`
+  / `TELEGRAM_WEBHOOK_SECRET` — optioneel; zonder bot-token blijft de
+  Telegram-integratie stil uitgeschakeld (geen ritten in een kanaal, geen
+  deelnemersreminder). `TELEGRAM_CHANNEL_INVITE_LINK` is de publieke
+  `https://t.me/...`-link die op de infopagina getoond wordt (anders dan
+  `TELEGRAM_CHANNEL_ID`, de interne chat-id voor de Bot-API)
 
 `SECRET_KEY` mag leeg blijven: wordt dan eenmalig gegenereerd in
 `data/secret.key`. Zet `COOKIE_SECURE=false` alleen als je lokaal via

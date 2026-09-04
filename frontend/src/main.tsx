@@ -31,6 +31,7 @@ import CommunityRoutesPage from "./pages/CommunityRoutesPage";
 import NewCommunityRoutePage from "./pages/NewCommunityRoutePage";
 import AdminPage from "./pages/AdminPage";
 import AccountPage from "./pages/AccountPage";
+import InfoPage from "./pages/InfoPage";
 import { theme } from "./theme";
 
 dayjs.locale("nl");
@@ -69,6 +70,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/community" element={<CommunityRoutesPage />} />
                 <Route path="/community/nieuw" element={<NewCommunityRoutePage />} />
                 <Route path="/account" element={<AccountPage />} />
+                <Route path="/informatie" element={<InfoPage />} />
                 <Route
                   path="/beheer"
                   element={

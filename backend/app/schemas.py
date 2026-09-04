@@ -394,6 +394,10 @@ class TelegramStatusOut(BaseModel):
     linked: bool
     username: str | None = None
     linked_at: datetime | None = None
+    #: Of de club Telegram überhaupt heeft ingesteld (bot-token aanwezig).
+    enabled: bool = False
+    bot_username: str | None = None
+    channel_invite_link: str | None = None
 
 
 class WeatherHourOut(BaseModel):

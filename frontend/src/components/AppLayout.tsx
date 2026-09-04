@@ -15,6 +15,7 @@ import { useDisclosure } from "@mantine/hooks";
 import {
   IconBike,
   IconFlag,
+  IconInfoCircle,
   IconLogout,
   IconMap2,
   IconSettings,
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { to: "/ritten", label: "Ritten", icon: IconBike },
   { to: "/events", label: "Events", icon: IconFlag },
   { to: "/community", label: "Community", icon: IconUsers },
+  { to: "/informatie", label: "Informatie", icon: IconInfoCircle },
 ];
 
 export default function AppLayout() {

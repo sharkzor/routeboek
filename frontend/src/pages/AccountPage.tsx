@@ -119,7 +119,9 @@ export default function AccountPage() {
     setUnlinking(true);
     try {
       await api.telegramUnlink();
-      setTelegram({ linked: false, username: null, linked_at: null });
+      setTelegram((prev) =>
+        prev ? { ...prev, linked: false, username: null, linked_at: null } : prev,
+      );
       notifications.show({ message: "Telegram-koppeling verwijderd.", color: "green" });
     } catch {
       notifications.show({ message: "Ontkoppelen is mislukt.", color: "red" });

@@ -920,8 +920,9 @@ paar kernverschillen:
   `RouteDetailPage`), zodat de hoofdbundel klein blijft.
 - Routes in de router zijn Nederlandstalig (`/inloggen`, `/registreren`,
   `/wachtwoord-vergeten`, `/wachtwoord-herstellen`, `/verifieren`, `/routes`,
-  `/ritten`, `/beheer`, `/account`). De e-maillinks in `routers/auth.py`
-  verwijzen naar `/verifieren` en `/wachtwoord-herstellen` — pas ze samen aan.
+  `/ritten`, `/beheer`, `/account`, `/informatie`). De e-maillinks in
+  `routers/auth.py` verwijzen naar `/verifieren` en `/wachtwoord-herstellen`
+  — pas ze samen aan.
 
 ---
 
@@ -1035,14 +1036,26 @@ ontvangt vlak voor vertrek een deelnemersoverzicht per Telegram-DM
   (geen spam, want het venster sluit vanzelf na de ritdatum).
 - **Alle omgevingsvariabelen** (`TELEGRAM_BOT_TOKEN`,
   `TELEGRAM_BOT_USERNAME`, `TELEGRAM_CHANNEL_ID`,
-  `TELEGRAM_WEBHOOK_SECRET`) staan in `.env` (niet in git) en moeten
-  expliciet in `docker-compose.yml`'s `environment:`-blok staan — anders
-  komen ze simpelweg niet in de container terecht, ook al staan ze in
-  `.env` (dit ging in eerste instantie mis: de webhook registreerde zich
-  pas nadat deze vier regels aan `docker-compose.yml` waren toegevoegd).
+  `TELEGRAM_CHANNEL_INVITE_LINK`, `TELEGRAM_WEBHOOK_SECRET`) staan in `.env`
+  (niet in git) en moeten expliciet in `docker-compose.yml`'s
+  `environment:`-blok staan — anders komen ze simpelweg niet in de
+  container terecht, ook al staan ze in `.env` (dit ging in eerste
+  instantie mis: de webhook registreerde zich pas nadat deze vier regels
+  aan `docker-compose.yml` waren toegevoegd).
   `telegram_enabled` (`config.py`) is `true` zodra er een bot-token is; bij
   een lege token doet de hele integratie stilzwijgend niets (geen crash op
   een omgeving zonder Telegram-configuratie).
+- **Infopagina** (`/informatie`, `frontend/src/pages/InfoPage.tsx`) legt
+  leden in gewone taal uit wat de Telegram-integratie doet en hoe ze hun
+  account koppelen; bevat ook de klikbare kanaal-uitnodigingslink
+  (`TELEGRAM_CHANNEL_INVITE_LINK`, **niet** hetzelfde als
+  `TELEGRAM_CHANNEL_ID` — dat laatste is de interne chat-id voor de Bot-API
+  en geen geldige/klikbare URL). Beide velden hergebruiken bewust het
+  bestaande `GET /api/telegram/status`-endpoint (uitgebreid met `enabled`,
+  `bot_username`, `channel_invite_link`) in plaats van een apart
+  publiek/ongeauthenticeerd endpoint te maken — de infopagina zit toch al
+  achter `RequireAuth`, dus is er geen reden om deze data zonder
+  inlogsessie op te vragen.
 
 ---
 
