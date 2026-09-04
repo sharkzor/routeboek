@@ -37,6 +37,7 @@ import {
   IconUpload,
   IconUsers,
 } from "@tabler/icons-react";
+import dayjs from "dayjs";
 
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -691,6 +692,7 @@ function UsersTab() {
                   <Table.Th>Naam</Table.Th>
                   <Table.Th>E-mail</Table.Th>
                   <Table.Th>Bevestigd</Table.Th>
+                  <Table.Th>Laatste login</Table.Th>
                   <Table.Th>Actief</Table.Th>
                   <Table.Th>Beheerder</Table.Th>
                   <Table.Th />
@@ -715,6 +717,17 @@ function UsersTab() {
                         >
                           Handmatig bevestigen
                         </Button>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      {item.last_login_at ? (
+                        <Text size="sm">
+                          {dayjs(item.last_login_at).format("D MMM YYYY HH:mm")}
+                        </Text>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          Nooit
+                        </Text>
                       )}
                     </Table.Td>
                     <Table.Td>
