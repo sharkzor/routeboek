@@ -29,6 +29,7 @@ import {
   type RideInput,
   type RideType,
   type RouteSummary,
+  type RouteType,
   type UserSummary,
 } from "../api/types";
 
@@ -41,6 +42,15 @@ const RIDE_TYPE_OPTIONS = (Object.keys(RIDE_TYPE_LABELS) as RideType[]).map((val
   value,
   label: RIDE_TYPE_LABELS[value],
 }));
+
+// Route- en rittype delen dezelfde onderliggende indeling (weg/weg met
+// gravel/gravel), dus het kiezen van een route mag het rittype meteen
+// voorinvullen.
+const RIDE_TYPE_FROM_ROUTE_TYPE: Record<RouteType, RideType> = {
+  road: "race",
+  road_gravel: "race_gravel",
+  gravel: "gravel",
+};
 
 interface FormValues {
   name: string;
@@ -188,6 +198,9 @@ export default function RideFormPage() {
     if (route.distance_km !== null) {
       form.setFieldValue("distance_km", route.distance_km);
     }
+    // Rittype volgt het routetype (weg/weg met gravel/gravel), zodat je dit
+    // niet dubbel hoeft in te stellen.
+    form.setFieldValue("ride_type", RIDE_TYPE_FROM_ROUTE_TYPE[route.route_type]);
   };
 
   const submit = form.onSubmit(async (values) => {
