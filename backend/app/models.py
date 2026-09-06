@@ -430,6 +430,33 @@ class RouteRating(Base):
     __table_args__ = (UniqueConstraint("route_id", "user_id", name="uq_route_rating_user"),)
 
 
+class RouteRatingRequest(Base):
+    """Onthoudt aan wie na een rit al een 'beoordeel deze route'-mail is
+    gestuurd, per (rit, deelnemer). Zonder deze tabel zou de dagelijkse
+    achtergrondtaak bij elke herstart of trage query dezelfde mail nog eens
+    versturen; met deze rij is versturen idempotent per rit-deelname."""
+
+    __tablename__ = "route_rating_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ride_id: Mapped[int] = mapped_column(
+        ForeignKey("rides.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    route_id: Mapped[int] = mapped_column(
+        ForeignKey("routes.id", ondelete="CASCADE"), index=True
+    )
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("ride_id", "user_id", name="uq_rating_request_ride_user"),
+    )
+
+
 class RouteComment(Base):
     """Reactie van een lid onder een route. Admins mogen elke reactie verwijderen."""
 

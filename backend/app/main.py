@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.services import osm_index
+from app.services import route_ratings
 from app.services import telegram as telegram_service
 from app.routers import (
     admin,
@@ -48,6 +49,10 @@ async def lifespan(app: FastAPI):
     # moet sturen; slaat zichzelf over zolang er geen bot-token is ingesteld.
     telegram_service.ensure_webhook()
     telegram_service.start_reminder_loop()
+    # Stuurt elke ochtend om 08:00 een mail naar deelnemers van de ritten van
+    # gisteren, met het verzoek de gereden route te beoordelen (idempotent,
+    # zie services/route_ratings.py).
+    route_ratings.start_rating_request_loop()
     logger.info("%s gestart op poort %s", settings.app_name, settings.port)
     yield
 
