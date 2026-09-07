@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/community", tags=["community"])
 
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
 SORT_OPTIONS = {
     "upvotes": (Route.upvote_count.desc(), Route.created_at.desc()),
     "recent": (Route.created_at.desc(),),
@@ -180,11 +183,61 @@ def create_community_route(
         wind_estimated=False,
         categories=payload.categories,
         strava_url=payload.strava_url,
+        komoot_url=payload.komoot_url,
         coordinates=payload.coordinates,
         origin=RouteOrigin.community,
         created_by_id=user.id,
     )
     db.add(route)
+    db.commit()
+    db.refresh(route)
+    return to_detail(route, viewer=user)
+
+
+@router.post("/routes/{route_id}/tcx", response_model=RouteDetail)
+async def upload_community_route_tcx(
+    route_id: int,
+    tcx: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> RouteDetail:
+    """TCX toevoegen aan een net aangeleverde community-route (optioneel).
+
+    Anders dan bij officiële routes wordt er bij het aanmaken van een
+    community-route bewust geen GPX-bestand weggeschreven (`coordinates` is
+    daar de bron van waarheid, zie de module-docstring). Een TCX heeft geen
+    coördinaten-fallback (i.t.t. GPX, via `build_gpx_from_coordinates`), dus
+    is een los upload-endpoint nodig voor wie zijn originele TCX ook wil
+    delen. Losstaand van `create_community_route` omdat FastAPI geen JSON-
+    body en multipart-file in één request combineert.
+    """
+    route = db.get(Route, route_id)
+    if route is None or route.origin != RouteOrigin.community:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Deze route bestaat niet."
+        )
+    if route.created_by_id != user.id and not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Je mag alleen een TCX toevoegen aan je eigen route.",
+        )
+
+    raw = await tcx.read()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Het TCX-bestand is leeg."
+        )
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Het bestand is te groot (maximaal 25 MB).",
+        )
+
+    settings = get_settings()
+    settings.ensure_dirs()
+    target = settings.media_dir / "tcx" / f"{route.slug}.tcx"
+    target.write_bytes(raw)
+    route.tcx_file = f"tcx/{route.slug}.tcx"
     db.commit()
     db.refresh(route)
     return to_detail(route, viewer=user)

@@ -126,6 +126,7 @@ class RouteSummary(BaseModel):
 class RouteDetail(RouteSummary):
     description_html: str
     strava_url: str | None
+    komoot_url: str | None
     coordinates: list[list[float]]
     created_at: datetime
     my_rating: int | None = None
@@ -188,7 +189,7 @@ def _normalize_categories(value: list[str]) -> list[str]:
 
 def _normalize_url(value: str | None) -> str | None:
     if value and not value.startswith(("http://", "https://")):
-        raise ValueError("De Strava-link moet met http(s):// beginnen.")
+        raise ValueError("Deze link moet met http(s):// beginnen.")
     return value or None
 
 
@@ -201,6 +202,7 @@ class RouteCreateIn(BaseModel):
     wind_directions: list[str] = Field(default_factory=list)
     categories: list[str] = Field(default_factory=list)
     strava_url: str | None = None
+    komoot_url: str | None = None
 
     @field_validator("wind_directions")
     @classmethod
@@ -212,7 +214,7 @@ class RouteCreateIn(BaseModel):
     def _cats(cls, value: list[str]) -> list[str]:
         return _normalize_categories(value)
 
-    @field_validator("strava_url")
+    @field_validator("strava_url", "komoot_url")
     @classmethod
     def _strava(cls, value: str | None) -> str | None:
         return _normalize_url(value)
@@ -225,6 +227,7 @@ class RouteUpdateIn(BaseModel):
     wind_directions: list[str] | None = None
     categories: list[str] | None = None
     strava_url: str | None = None
+    komoot_url: str | None = None
     is_active: bool | None = None
 
     @field_validator("wind_directions")
@@ -237,7 +240,7 @@ class RouteUpdateIn(BaseModel):
     def _cats(cls, value: list[str] | None) -> list[str] | None:
         return None if value is None else _normalize_categories(value)
 
-    @field_validator("strava_url")
+    @field_validator("strava_url", "komoot_url")
     @classmethod
     def _strava(cls, value: str | None) -> str | None:
         return _normalize_url(value)
@@ -265,6 +268,7 @@ class CommunityRouteCreateIn(BaseModel):
     wind_directions: list[str] = Field(default_factory=list)
     categories: list[str] = Field(default_factory=list)
     strava_url: str | None = None
+    komoot_url: str | None = None
     distance_km: float = Field(ge=0, le=400)
     elevation_m: int = Field(ge=0, le=6000)
     coordinates: list[list[float]] = Field(min_length=2, max_length=20_000)
@@ -279,7 +283,7 @@ class CommunityRouteCreateIn(BaseModel):
     def _cats(cls, value: list[str]) -> list[str]:
         return _normalize_categories(value)
 
-    @field_validator("strava_url")
+    @field_validator("strava_url", "komoot_url")
     @classmethod
     def _strava(cls, value: str | None) -> str | None:
         return _normalize_url(value)

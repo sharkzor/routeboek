@@ -49,12 +49,14 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 @router.post("/routes", response_model=RouteSummary, status_code=status.HTTP_201_CREATED)
 async def create_route(
     gpx: UploadFile = File(...),
+    tcx: UploadFile | None = File(default=None),
     name: str = Form(...),
     description_html: str = Form(default=""),
     route_type: RouteType = Form(default=RouteType.road),
     wind_directions: str = Form(default=""),
     categories: str = Form(default=""),
     strava_url: str = Form(default=""),
+    komoot_url: str = Form(default=""),
     db: Session = Depends(get_db),
     admin: User = Depends(current_admin),
 ) -> RouteSummary:
@@ -72,6 +74,15 @@ async def create_route(
             detail="Het bestand is te groot (maximaal 25 MB).",
         )
 
+    tcx_raw: bytes | None = None
+    if tcx is not None and tcx.filename:
+        tcx_raw = await tcx.read()
+        if tcx_raw and len(tcx_raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Het TCX-bestand is te groot (maximaal 25 MB).",
+            )
+
     # Comma-gescheiden formuliervelden valideren via het bestaande schema.
     meta = RouteCreateIn(
         name=name,
@@ -80,6 +91,7 @@ async def create_route(
         wind_directions=[w for w in wind_directions.split(",") if w.strip()],
         categories=[c for c in categories.split(",") if c.strip()],
         strava_url=strava_url or None,
+        komoot_url=komoot_url or None,
     )
 
     try:
@@ -94,6 +106,12 @@ async def create_route(
     target = settings.media_dir / "gpx" / f"{slug}.gpx"
     target.write_bytes(raw)
 
+    tcx_file = None
+    if tcx_raw:
+        tcx_target = settings.media_dir / "tcx" / f"{slug}.tcx"
+        tcx_target.write_bytes(tcx_raw)
+        tcx_file = f"tcx/{slug}.tcx"
+
     route = Route(
         slug=slug,
         name=meta.name.strip(),
@@ -104,7 +122,9 @@ async def create_route(
         wind_directions=meta.wind_directions,
         categories=meta.categories,
         strava_url=meta.strava_url,
+        komoot_url=meta.komoot_url,
         gpx_file=f"gpx/{slug}.gpx",
+        tcx_file=tcx_file,
         coordinates=[[round(p.lat, 6), round(p.lon, 6)] for p in points],
         created_by_id=admin.id,
     )

@@ -206,6 +206,7 @@ class Route(Base):
     legacy_rating_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     strava_url: Mapped[str | None] = mapped_column(String(500))
+    komoot_url: Mapped[str | None] = mapped_column(String(500))
     gpx_file: Mapped[str | None] = mapped_column(String(255))
     tcx_file: Mapped[str | None] = mapped_column(String(255))
     map_file: Mapped[str | None] = mapped_column(String(255))

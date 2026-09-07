@@ -666,7 +666,8 @@ toevoegen aan de GPX. De logica is overgenomen uit `/home/shark/gpx`
 - Er komt een waarschuwing bij een "droog" stuk langer dan `gap_warning_km`.
 
 ### Adminpagina
-Routes toevoegen (GPX-upload), bewerken en verwijderen (`GET/PATCH/DELETE
+Routes toevoegen (GPX-upload, met optioneel een TCX-bestand en/of een
+Strava-/Komoot-link), bewerken en verwijderen (`GET/PATCH/DELETE
 /api/admin/routes/{id}`; de admin-detailendpoint negeert `is_active` zodat
 ook verborgen routes te bewerken zijn), gebruikers activeren/blokkeren en
 adminrechten toekennen. Daarnaast een tabblad **Wegenkaart** met de
@@ -763,8 +764,20 @@ niets meer dan `origin` terugzetten op `"official"`
   GPX-bestand en toont een preview (naam, afstand, hoogtemeters, geschatte
   windrichting) zónder iets op te slaan; stap 2 laat de aanbieder de
   metadata aanvullen (naam, beschrijving, soort, windrichting, categorieën,
-  optioneel een Strava-link als losse referentie) en slaat pas dan de route
-  op (`POST /api/community/routes`).
+  optioneel een Strava- én/of Komoot-link als losse referentie, en optioneel
+  een TCX-bestand) en slaat pas dan de route op (`POST /api/community/routes`).
+- **TCX is een apart upload-endpoint, geen onderdeel van de aanmaak-POST.**
+  Anders dan bij officiële routes wordt bij het aanmaken van een
+  community-route bewust geen fysiek GPX-bestand weggeschreven (`coordinates`
+  blijft de bron van waarheid, zie hieronder); GPX-downloads vallen daarom
+  terug op `build_gpx_from_coordinates`. Een TCX heeft géén coördinaten-
+  fallback, dus wie zijn originele TCX ook wil delen uploadt die na het
+  aanmaken via `POST /api/community/routes/{id}/tcx` (multipart, veld
+  `tcx`, alleen de aanbieder of een admin). Losstaand van de aanmaak-POST
+  omdat FastAPI geen JSON-body en een multipart-bestand in één request
+  combineert. De frontend roept dit endpoint automatisch aan vlak na het
+  aanmaken als er een TCX gekozen is; een mislukte upload blokkeert het
+  aanmaken zelf niet (alleen een gele melding).
 - **Geen link/URL-import.** Er is bewust géén "importeer via Strava/Komoot-
   link"-optie: Komoot blokkeert zowel de onofficiële API als tourpagina's
   met 403 (ook voor bekende publieke tour-ID's), en Strava's routepagina's
@@ -775,8 +788,11 @@ niets meer dan `origin` terugzetten op `"official"`
   alleen een foutmelding op, dus is de optie weer verwijderd. **Voeg 'm niet
   opnieuw toe** zonder dat Strava/Komoot een publieke, aanmeldingsvrije
   export-API bieden. Wil een gebruiker toch de link erbij? Dat kan al: stap 2
-  heeft een los, optioneel "Strava-link"-veld (`Route.strava_url`) dat
-  gewoon als referentie bij de geüploade GPX komt te staan.
+  heeft losse, optionele "Strava-link"- en "Komoot-link"-velden
+  (`Route.strava_url`/`Route.komoot_url`) die gewoon als referentie bij de
+  geüploade GPX komen te staan — bedoeld voor leden zonder Strava-abonnement
+  die alleen een Komoot-link kunnen delen. Dezelfde twee velden staan ook in
+  het beheer-formulier voor officiële routes.
 - **`Route.upvote_count`** is een gedenormaliseerde teller die bij elke
   stem/intrekking in `RouteUpvote` wordt bij- of afgeteld (niet elke keer
   herberekend); `GET /api/community/routes` levert ook `my_upvote` per

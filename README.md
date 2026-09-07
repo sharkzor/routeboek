@@ -37,16 +37,17 @@ Productie: <https://routeboek.unencrypted.nl>
   deelnemers en vervoerskeuze per deelnemer (auto/trein/eigen
   gelegenheid/fiets)
 - **Community-routes**: leden leveren zelf een GPX aan via een
-  twee-staps-wizard, met een eigen overzicht (filters + sortering op meeste
-  stemmen); admins kunnen een inzending promoveren naar het officiële
-  routeboek, de aanbieder (of een admin) kan 'm ook weer intrekken
+  twee-staps-wizard (optioneel met TCX-upload en een Strava-/Komoot-link),
+  met een eigen overzicht (filters + sortering op meeste stemmen); admins
+  kunnen een inzending promoveren naar het officiële routeboek, de aanbieder
+  (of een admin) kan 'm ook weer intrekken
 - Reacties en waarderingen per route (gewogen met de historische
   routeboek.cc-waardering), **favorieten** en **"gereden"-markering** per lid
 - Automatisch gegenereerde kaartminiatuur (OSM-achtergrond + routelijn) voor
   routes zonder eigen kaartbestand (community- en zelf toegevoegde routes)
-- Beheerpagina: routes toevoegen (GPX-upload)/bewerken/verwijderen,
-  gebruikersbeheer, en beheer van de lokale OSM-wegenkaart (status +
-  handmatig verversen)
+- Beheerpagina: routes toevoegen (GPX-upload, optioneel met TCX en een
+  Strava-/Komoot-link)/bewerken/verwijderen, gebruikersbeheer, en beheer van
+  de lokale OSM-wegenkaart (status + handmatig verversen)
 - **Telegram-integratie**: nieuwe ritten worden automatisch in het
   clubkanaal geplaatst (bewerken/annuleren werkt het bestaande
   kanaalbericht bij), en de wegkapitein ontvangt vlak voor vertrek een

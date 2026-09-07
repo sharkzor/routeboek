@@ -262,6 +262,14 @@ export const api = {
   },
   createCommunityRoute: (payload: CommunityRouteCreateIn) =>
     request<RouteDetail>("/api/community/routes", { method: "POST", ...json(payload) }),
+  uploadCommunityRouteTcx: (routeId: number, file: File) => {
+    const form = new FormData();
+    form.append("tcx", file);
+    return request<RouteDetail>(`/api/community/routes/${routeId}/tcx`, {
+      method: "POST",
+      body: form,
+    });
+  },
   upvoteRoute: (routeId: number) =>
     request<UpvoteResult>(`/api/community/routes/${routeId}/upvote`, { method: "POST" }),
   removeUpvote: (routeId: number) =>

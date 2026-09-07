@@ -29,6 +29,7 @@ import {
   IconDroplet,
   IconHeart,
   IconHeartFilled,
+  IconMapPin,
   IconShieldSearch,
   IconThumbUp,
   IconTrash,
@@ -379,6 +380,19 @@ export default function RouteDetailPage() {
             leftSection={<IconBrandStrava size={18} />}
           >
             Strava
+          </Button>
+        )}
+        {route.komoot_url && (
+          <Button
+            component="a"
+            href={route.komoot_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="light"
+            color="green"
+            leftSection={<IconMapPin size={18} />}
+          >
+            Komoot
           </Button>
         )}
         {route.has_gpx && (

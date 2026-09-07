@@ -272,6 +272,7 @@ def to_detail(
         **summary.model_dump(),
         description_html=route.description_html,
         strava_url=route.strava_url,
+        komoot_url=route.komoot_url,
         coordinates=route.coordinates or [],
         created_at=route.created_at,
         my_rating=my_rating,

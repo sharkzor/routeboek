@@ -47,6 +47,8 @@ export default function NewCommunityRoutePage() {
   const [wind, setWind] = useState<WindCode[]>([]);
   const [categories, setCategories] = useState<CategoryCode[]>([]);
   const [strava, setStrava] = useState("");
+  const [komoot, setKomoot] = useState("");
+  const [tcxFile, setTcxFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -83,10 +85,26 @@ export default function NewCommunityRoutePage() {
         wind_directions: wind,
         categories,
         strava_url: strava.trim() || null,
+        komoot_url: komoot.trim() || null,
         distance_km: preview.distance_km,
         elevation_m: preview.elevation_m,
         coordinates: preview.coordinates,
       });
+      if (tcxFile) {
+        // Best-effort: de route zelf staat er al; een mislukte TCX-upload
+        // mag het aanmaken niet blokkeren, alleen een melding geven.
+        try {
+          await api.uploadCommunityRouteTcx(route.id, tcxFile);
+        } catch (err) {
+          notifications.show({
+            message:
+              err instanceof ApiError
+                ? `Route aangemaakt, maar TCX-upload mislukt: ${err.message}`
+                : "Route aangemaakt, maar de TCX-upload is mislukt.",
+            color: "yellow",
+          });
+        }
+      }
       notifications.show({
         message: `'${route.name}' staat nu bij Community routes.`,
         color: "green",
@@ -221,6 +239,22 @@ export default function NewCommunityRoutePage() {
                 placeholder="https://www.strava.com/routes/..."
                 value={strava}
                 onChange={(event) => setStrava(event.currentTarget.value)}
+              />
+              <TextInput
+                label="Komoot-link (optioneel)"
+                placeholder="https://www.komoot.com/tour/..."
+                value={komoot}
+                onChange={(event) => setKomoot(event.currentTarget.value)}
+              />
+              <FileInput
+                label="TCX-bestand (optioneel)"
+                description="Wil je naast de GPX ook je originele TCX delen? Upload 'm hier."
+                placeholder="Kies een .tcx bestand"
+                accept=".tcx,application/vnd.garmin.tcx+xml"
+                leftSection={<IconUpload size={16} />}
+                value={tcxFile}
+                onChange={setTcxFile}
+                clearable
               />
               <Group justify="flex-end">
                 <Button variant="subtle" color="gray" onClick={() => setStep(0)}>

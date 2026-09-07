@@ -56,6 +56,7 @@ export interface RouteSummary {
 export interface RouteDetail extends RouteSummary {
   description_html: string;
   strava_url: string | null;
+  komoot_url: string | null;
   coordinates: [number, number][];
   created_at: string;
   my_rating: number | null;
@@ -76,6 +77,7 @@ export interface CommunityRouteCreateIn {
   wind_directions: WindCode[];
   categories: CategoryCode[];
   strava_url: string | null;
+  komoot_url: string | null;
   distance_km: number;
   elevation_m: number;
   coordinates: [number, number][];

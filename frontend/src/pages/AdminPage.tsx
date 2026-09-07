@@ -340,12 +340,14 @@ function AddRouteModal({
   onCreated: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  const [tcxFile, setTcxFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [routeType, setRouteType] = useState<RouteType>("road");
   const [wind, setWind] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [strava, setStrava] = useState("");
+  const [komoot, setKomoot] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -358,21 +360,25 @@ function AddRouteModal({
     setError(null);
     const form = new FormData();
     form.append("gpx", file);
+    if (tcxFile) form.append("tcx", tcxFile);
     form.append("name", name.trim());
     form.append("description_html", description);
     form.append("route_type", routeType);
     form.append("wind_directions", wind.join(","));
     form.append("categories", categories.join(","));
     form.append("strava_url", strava.trim());
+    form.append("komoot_url", komoot.trim());
     try {
       const route = await api.adminCreateRoute(form);
       notifications.show({ message: `'${route.name}' is toegevoegd.`, color: "green" });
       setFile(null);
+      setTcxFile(null);
       setName("");
       setDescription("");
       setWind([]);
       setCategories([]);
       setStrava("");
+      setKomoot("");
       onCreated();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Toevoegen is mislukt.");
@@ -400,6 +406,16 @@ function AddRouteModal({
             if (next && name === "") setName(next.name.replace(/\.gpx$/i, ""));
           }}
           required
+        />
+        <FileInput
+          label="TCX-bestand (optioneel)"
+          description="Alleen nodig als je naast de GPX ook een TCX wilt aanbieden."
+          placeholder="Kies een .tcx bestand"
+          accept=".tcx,application/vnd.garmin.tcx+xml"
+          leftSection={<IconUpload size={16} />}
+          value={tcxFile}
+          onChange={setTcxFile}
+          clearable
         />
         <TextInput
           label="Naam"
@@ -449,6 +465,12 @@ function AddRouteModal({
           value={strava}
           onChange={(event) => setStrava(event.currentTarget.value)}
         />
+        <TextInput
+          label="Komoot-link (optioneel)"
+          placeholder="https://www.komoot.com/tour/..."
+          value={komoot}
+          onChange={(event) => setKomoot(event.currentTarget.value)}
+        />
         <Group justify="flex-end">
           <Button variant="subtle" color="gray" onClick={onClose}>
             Annuleren
@@ -478,6 +500,7 @@ function EditRouteModal({
   const [wind, setWind] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [strava, setStrava] = useState("");
+  const [komoot, setKomoot] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -496,6 +519,7 @@ function EditRouteModal({
         setWind(route.wind_directions);
         setCategories(route.categories);
         setStrava(route.strava_url ?? "");
+        setKomoot(route.komoot_url ?? "");
       })
       .catch((err) => {
         if (!cancelled) {
@@ -525,6 +549,7 @@ function EditRouteModal({
         wind_directions: wind,
         categories,
         strava_url: strava.trim() || null,
+        komoot_url: komoot.trim() || null,
       });
       notifications.show({ message: `'${route.name}' is bijgewerkt.`, color: "green" });
       onSaved();
@@ -595,6 +620,12 @@ function EditRouteModal({
             placeholder="https://www.strava.com/routes/..."
             value={strava}
             onChange={(event) => setStrava(event.currentTarget.value)}
+          />
+          <TextInput
+            label="Komoot-link (optioneel)"
+            placeholder="https://www.komoot.com/tour/..."
+            value={komoot}
+            onChange={(event) => setKomoot(event.currentTarget.value)}
           />
           <Group justify="flex-end">
             <Button variant="subtle" color="gray" onClick={onClose}>
