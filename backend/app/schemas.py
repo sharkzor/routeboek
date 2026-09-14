@@ -154,6 +154,18 @@ class CommentCreateIn(BaseModel):
         return value
 
 
+class RouteReportIn(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("message")
+    @classmethod
+    def _strip(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Geef een omschrijving van het probleem op.")
+        return value
+
+
 class RatingIn(BaseModel):
     value: int = Field(ge=1, le=5)
 

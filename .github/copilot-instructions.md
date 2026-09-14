@@ -814,6 +814,22 @@ dezelfde ronde terug op de gewone mail, zodat het verzoek nooit zoekraakt.
 voor de idempotentie niet uit via welk kanaal het verzoek uiteindelijk is
 aangekomen.
 
+### Route melden
+Elke ingelogde gebruiker kan via de knop "Melden" op de routedetailpagina
+(`RouteDetailPage.tsx`, naast "Organiseer een rit") een vrije-tekstmelding
+sturen over een route (kapotte link, verouderde beschrijving, afgesloten
+weg, enz.). `POST /api/routes/{id}/report` (`app/routers/social.py`,
+schema `RouteReportIn`) stuurt daarvoor **per actieve beheerder een losse
+mail** (`app/mail.py:send_route_report_mail()`), niet één mail met bcc: zo
+blokkeert een ongeldig adres bij de ene beheerder de melding aan de andere
+niet. Verzending gebeurt via `BackgroundTasks`, net als de rest van de
+mailflows, zodat het request niet op de SMTP-server hoeft te wachten. De
+mail bevat de melder (naam + e-mailadres, geen anonimiteit — dat maakt
+opvolgen makkelijker), de vrije tekst en een link naar de route. Er is
+bewust geen aparte "meldingen"-tabel of statusveld (opgelost/genegeerd):
+dit is een lichtgewicht meldpunt, geen ticketsysteem: beheerders handelen
+het verder af per e-mail.
+
 ### Favorieten en gereden routes
 Elk lid kan een route als **favoriet** markeren en afvinken als **gereden**.
 Twee losse tabellen (`route_favorites`, `route_completions`), allebei

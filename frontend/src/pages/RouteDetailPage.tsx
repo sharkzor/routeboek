@@ -14,6 +14,7 @@ import {
   SimpleGrid,
   Stack,
   Text,
+  Textarea,
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
@@ -27,6 +28,7 @@ import {
   IconCheck,
   IconDownload,
   IconDroplet,
+  IconFlag,
   IconHeart,
   IconHeartFilled,
   IconMapPin,
@@ -67,6 +69,9 @@ export default function RouteDetailPage() {
   const [promoting, setPromoting] = useState(false);
   const [deleteOpened, deleteModal] = useDisclosure(false);
   const [deleting, setDeleting] = useState(false);
+  const [reportOpened, reportModal] = useDisclosure(false);
+  const [reportMessage, setReportMessage] = useState("");
+  const [reporting, setReporting] = useState(false);
   const legality = useLegalityCheck(Number(routeId));
 
   useEffect(() => {
@@ -193,6 +198,27 @@ export default function RouteDetailPage() {
     }
   };
 
+  const submitReport = async () => {
+    if (!route || !reportMessage.trim()) return;
+    setReporting(true);
+    try {
+      await api.reportRoute(route.id, reportMessage.trim());
+      notifications.show({
+        message: "Bedankt, je melding is verstuurd naar de beheerders.",
+        color: "green",
+      });
+      setReportMessage("");
+      reportModal.close();
+    } catch (err) {
+      notifications.show({
+        message: err instanceof ApiError ? err.message : "Melding versturen is mislukt.",
+        color: "red",
+      });
+    } finally {
+      setReporting(false);
+    }
+  };
+
   return (
     <Stack gap="lg">
       <Anchor component={Link} to="/routes" c="dimmed" size="sm">
@@ -282,6 +308,14 @@ export default function RouteDetailPage() {
             onClick={() => navigate(`/ritten/nieuw?route=${route.id}`)}
           >
             Organiseer een rit
+          </Button>
+          <Button
+            variant="subtle"
+            color="gray"
+            leftSection={<IconFlag size={18} />}
+            onClick={reportModal.open}
+          >
+            Melden
           </Button>
         </Group>
       </Group>
@@ -459,6 +493,50 @@ export default function RouteDetailPage() {
             </Button>
             <Button color="red" loading={deleting} onClick={() => void deleteRoute()}>
               Verwijderen
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={reportOpened}
+        onClose={() => {
+          reportModal.close();
+          setReportMessage("");
+        }}
+        title="Route melden"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Klopt er iets niet met deze route (bijv. een verkeerde beschrijving, een afgesloten
+            weg of een kapotte link)? Laat het de beheerders weten.
+          </Text>
+          <Textarea
+            label="Omschrijving"
+            placeholder="Wat is er aan de hand met deze route?"
+            minRows={4}
+            autosize
+            required
+            value={reportMessage}
+            onChange={(event) => setReportMessage(event.currentTarget.value)}
+          />
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                reportModal.close();
+                setReportMessage("");
+              }}
+            >
+              Annuleren
+            </Button>
+            <Button
+              color="routeboek"
+              loading={reporting}
+              disabled={!reportMessage.trim()}
+              onClick={() => void submitReport()}
+            >
+              Versturen
             </Button>
           </Group>
         </Stack>

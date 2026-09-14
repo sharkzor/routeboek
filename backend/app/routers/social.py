@@ -8,16 +8,26 @@ mag alleen een admin (bijvoorbeeld bij ongepaste inhoud).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.deps import current_admin, current_user
+from app.mail import send_route_report_mail
 from app.models import RouteComment, RouteCompletion, RouteFavorite, RouteRating, User
 from app.rating import recompute_rating
 from app.routers.routes import get_route_or_404
-from app.schemas import CommentCreateIn, CommentOut, MarkOut, RatingIn, RatingOut
+from app.schemas import (
+    CommentCreateIn,
+    CommentOut,
+    Message,
+    MarkOut,
+    RatingIn,
+    RatingOut,
+    RouteReportIn,
+)
 
 router = APIRouter(prefix="/api/routes", tags=["social"])
 
@@ -192,3 +202,35 @@ def remove_ridden(
 ) -> MarkOut:
     get_route_or_404(db, route_id)
     return MarkOut(active=_toggle_mark(db, RouteCompletion, route_id, user.id, False))
+
+
+@router.post("/{route_id}/report", response_model=Message, status_code=status.HTTP_202_ACCEPTED)
+def report_route(
+    route_id: int,
+    payload: RouteReportIn,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Message:
+    """Meld een probleem met een route bij alle beheerders per mail.
+
+    Elke actieve beheerder krijgt een losse mail (geen bcc-lijst), zodat een
+    ongeldig adres bij de ene beheerder de melding aan de andere niet blokkeert.
+    """
+    route = get_route_or_404(db, route_id)
+    settings = get_settings()
+    route_url = f"{settings.base_url.rstrip('/')}/routes/{route.id}"
+    admins = db.scalars(
+        select(User).where(User.is_admin.is_(True), User.is_active.is_(True))
+    ).all()
+    for admin in admins:
+        background.add_task(
+            send_route_report_mail,
+            admin.email,
+            user.display_name,
+            user.email,
+            route.name,
+            route_url,
+            payload.message,
+        )
+    return Message(detail="Bedankt voor je melding. De beheerders zijn op de hoogte gebracht.")

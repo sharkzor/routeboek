@@ -382,6 +382,11 @@ export const api = {
     }),
   clearRating: (routeId: number) =>
     request<RatingResult>(`/api/routes/${routeId}/rating`, { method: "DELETE" }),
+  reportRoute: (routeId: number, message: string) =>
+    request<{ detail: string }>(`/api/routes/${routeId}/report`, {
+      method: "POST",
+      ...json({ message }),
+    }),
 
   // ----------------------------------------------------------------- admin
   adminRoutes: (search?: string) =>

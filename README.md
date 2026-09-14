@@ -52,6 +52,8 @@ Productie: <https://routeboek.unencrypted.nl>
   zelf uit en zorg dat er geen illegale paden in zitten
 - Reacties en waarderingen per route (gewogen met de historische
   routeboek.cc-waardering), **favorieten** en **"gereden"-markering** per lid
+- **Route melden**: knop op de routepagina om beheerders per mail te laten
+  weten dat er iets mis is met een route (vrije tekst)
 - Automatisch gegenereerde kaartminiatuur (OSM-achtergrond + routelijn) voor
   routes zonder eigen kaartbestand (community- en zelf toegevoegde routes)
 - Beheerpagina: routes toevoegen (GPX-upload, optioneel met TCX en een

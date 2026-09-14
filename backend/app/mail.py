@@ -200,3 +200,30 @@ def send_password_reset_mail(to: str, name: str, url: str, ttl_minutes: int) -> 
         "Dan hoef je niets te doen; je wachtwoord blijft ongewijzigd.",
     )
     send_mail(to, subject, text, html)
+
+
+def send_route_report_mail(
+    to: str, reporter_name: str, reporter_email: str, route_name: str, route_url: str, message: str
+) -> None:
+    """Melding van een lid dat er iets mis is met een route, naar één beheerder.
+
+    Wordt per beheerder apart aangeroepen (niet als bcc-lijst) zodat een
+    ongeldig adres van de ene beheerder de melding aan de andere niet blokkeert.
+    """
+    subject = f"Melding over route: {route_name}"
+    text = (
+        f"{reporter_name} ({reporter_email}) heeft een melding gedaan over de "
+        f"route '{route_name}':\n\n{message}\n\nBekijk de route via:\n{route_url}\n"
+    )
+    safe_message = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    html = f"""\
+<div style="{_STYLE}">
+  <h2 style="color:#F4244E;margin-bottom:4px">Melding over een route</h2>
+  <p>
+    <strong>{reporter_name}</strong> ({reporter_email}) heeft een melding
+    gedaan over de route <strong>{route_name}</strong>:
+  </p>
+  <p style="background:#f8f9fb;border-radius:8px;padding:16px;white-space:pre-wrap">{safe_message}</p>
+  <p style="margin:28px 0"><a href="{route_url}" style="{_BUTTON}">Bekijk de route</a></p>
+</div>"""
+    send_mail(to, subject, text, html)
