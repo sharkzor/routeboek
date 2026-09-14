@@ -270,6 +270,16 @@ def _reminder_text(ride: Ride) -> str:
     return "\n".join(lines)
 
 
+def rating_request_text(route_name: str, route_url: str) -> str:
+    """Bericht voor de dagelijkse 'beoordeel je rit'-taak
+    (`services/route_ratings.py`), voor leden die de bot gekoppeld hebben.
+    Die krijgen liever een Telegram-bericht dan nóg een mail."""
+    return (
+        f"⭐ Je hebt gisteren '{route_name}' gereden. Wil je deze route "
+        f"beoordelen?\n\n{route_url}"
+    )
+
+
 def _send_due_reminders() -> None:
     settings = get_settings()
     if not settings.telegram_enabled:

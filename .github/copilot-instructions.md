@@ -702,19 +702,30 @@ gedeelde helper `app/rating.py:recompute_rating()`, aangeroepen door zowel
 stem/verwijdering). Zo blijft historische informatie behouden zonder dat
 scrapete "stemmen" een eigen gebruikersaccount nodig hebben.
 
-**Beoordeel-je-rit-mail** (`app/services/route_ratings.py`,
-`app/mail.py:send_route_rating_mail()`): elke ochtend om 08:00 lokale tijd
-(zelfde achtergrondthread-patroon als de Telegram-reminderloop in
+**Beoordeel-je-rit-melding** (`app/services/route_ratings.py`,
+`app/mail.py:send_route_rating_mail()`, `app/services/telegram.py:
+rating_request_text()`): elke ochtend om 08:00 lokale tijd (zelfde
+achtergrondthread-patroon als de Telegram-reminderloop in
 `services/telegram.py`) krijgt iedere deelnemer van een rit van de vorige
-dag — mits die een gekoppelde route heeft — een mail met het verzoek de
-gereden route te beoordelen. Geen mail als het lid die route al eerder
-beoordeeld had (`RouteRating` bestaat al), en nooit een tweede keer voor
-dezelfde rit-deelname dankzij `RouteRatingRequest` (uniek per
-`ride_id`/`user_id`), ook niet na een herstart rond 08:00. De mail linkt
-naar de routepagina (`/routes/{id}`) in plaats van los klikbare
-ster-links te bevatten zoals het oude routeboek.cc deed — dat zou een
-nieuw ongeauthenticeerd endpoint vereisen (beveiligingsregel 1) en een
-e-mail is makkelijker door te sturen dan een sessie te stelen.
+dag — mits die een gekoppelde route heeft — een verzoek om de gereden route
+te beoordelen. Geen melding als het lid die route al eerder beoordeeld had
+(`RouteRating` bestaat al), en nooit een tweede keer voor dezelfde
+rit-deelname dankzij `RouteRatingRequest` (uniek per `ride_id`/`user_id`),
+ook niet na een herstart rond 08:00. De link wijst naar de routepagina
+(`/routes/{id}`) in plaats van los klikbare ster-links te bevatten zoals het
+oude routeboek.cc deed — dat zou een nieuw ongeauthenticeerd endpoint
+vereisen (beveiligingsregel 1) en een e-mail/Telegram-bericht is makkelijker
+door te sturen dan een sessie te stelen.
+
+**Telegram heeft voorrang boven e-mail.** Heeft een deelnemer de bot
+gekoppeld (`User.telegram_chat_id` niet leeg), dan krijgt die een
+Telegram-bericht in plaats van een mail — leden lezen dat sneller en het is
+minder spam-gevoelig dan nóg een e-mail. Mislukt het Telegram-bericht (bot
+geblokkeerd, ongeldige chat-id, Telegram-storing), dan valt de taak binnen
+dezelfde ronde terug op de gewone mail, zodat het verzoek nooit zoekraakt.
+`RouteRatingRequest` wordt in beide gevallen hetzelfde vastgelegd; het maakt
+voor de idempotentie niet uit via welk kanaal het verzoek uiteindelijk is
+aangekomen.
 
 ### Favorieten en gereden routes
 Elk lid kan een route als **favoriet** markeren en afvinken als **gereden**.

@@ -1,4 +1,4 @@
-"""Dagelijkse 'beoordeel je rit'-mail, de ochtend na een clubrit.
+"""Dagelijkse 'beoordeel je rit'-melding, de ochtend na een clubrit.
 
 Draait als achtergrondthread (zelfde patroon als de Telegram-reminderloop in
 `services/telegram.py`): een lus die elke minuut checkt of het 08:00 lokale
@@ -6,6 +6,11 @@ tijd is en de taak dat kalenderdag nog niet gedraaid heeft. Verzenden zelf is
 idempotent via `RouteRatingRequest` (uniek per rit + deelnemer), dus een
 toevallige dubbele run (bv. na een herstart rond 08:00) veroorzaakt nooit
 dubbele mails.
+
+Leden die de Telegram-bot gekoppeld hebben (`User.telegram_chat_id`) krijgen
+een Telegram-bericht in plaats van een mail — dat is minder spam-gevoelig en
+wordt vaker gelezen. Mislukt dat bericht (bot geblokkeerd, Telegram-storing),
+dan valt het alsnog terug op de e-mail, zodat het verzoek nooit zoekraakt.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.mail import send_route_rating_mail
 from app.models import Ride, RideParticipant, RouteRating, RouteRatingRequest
+from app.services import telegram as telegram_service
 
 logger = logging.getLogger(__name__)
 
@@ -81,16 +87,36 @@ def send_due_rating_requests(*, for_date: date | None = None) -> int:
                     db.commit()
                     continue
                 route_url = f"{settings.base_url}/routes/{route.id}"
-                try:
-                    send_route_rating_mail(
-                        user.email, user.display_name, route.name, route_url
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.exception(
-                        "beoordeel-mail voor rit %s / gebruiker %s mislukt",
-                        ride.id,
-                        user.id,
-                    )
+                sent_via_telegram = False
+                if user.telegram_chat_id is not None:
+                    # Wie de bot gekoppeld heeft, krijgt liever een Telegram-
+                    # bericht dan nóg een mail. Mislukt dat (bv. de gebruiker
+                    # heeft de bot geblokkeerd), dan valt terug op e-mail
+                    # zodat het verzoek hoe dan ook aankomt.
+                    try:
+                        telegram_service.send_message(
+                            user.telegram_chat_id,
+                            telegram_service.rating_request_text(route.name, route_url),
+                        )
+                        sent_via_telegram = True
+                    except telegram_service.TelegramError:
+                        logger.warning(
+                            "beoordeel-telegrambericht voor rit %s / gebruiker %s "
+                            "mislukt, val terug op e-mail",
+                            ride.id,
+                            user.id,
+                        )
+                if not sent_via_telegram:
+                    try:
+                        send_route_rating_mail(
+                            user.email, user.display_name, route.name, route_url
+                        )
+                    except Exception:  # noqa: BLE001
+                        logger.exception(
+                            "beoordeel-mail voor rit %s / gebruiker %s mislukt",
+                            ride.id,
+                            user.id,
+                        )
                 db.commit()
                 sent += 1
     finally:
