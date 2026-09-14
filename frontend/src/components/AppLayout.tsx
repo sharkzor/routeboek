@@ -32,9 +32,9 @@ import { useAuth } from "../auth/AuthContext";
 const NAV_ITEMS = [
   { to: "/", label: "Routes", icon: IconMap2 },
   { to: "/ritten", label: "Ritten", icon: IconBike },
+  { to: "/community", label: "Community", icon: IconUsers },
   { to: "/events", label: "Events", icon: IconFlag },
   { to: "/werkzaamheden", label: "Werkzaamheden", icon: IconBarrierBlock },
-  { to: "/community", label: "Community", icon: IconUsers },
   { to: "/informatie", label: "Informatie", icon: IconInfoCircle },
 ];
 
