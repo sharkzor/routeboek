@@ -460,3 +460,62 @@ export interface OsmMapStatus {
   job_progress: number;
   job_error: string | null;
 }
+
+// ------------------------------------------------------------- instellingen
+
+export interface AppSettings {
+  /** Alle instelbare velden; geheimen staan hier altijd op null. */
+  values: Record<string, unknown>;
+  /** Per geheim veld of het gevuld is. De waarde zelf verlaat de server nooit. */
+  secrets_set: Record<string, boolean>;
+  /** Niet-instelbare velden met hun huidige waarde (geheimen gemaskeerd). */
+  readonly: Record<string, string>;
+  /** Per niet-instelbaar veld waaróm het niet instelbaar is. */
+  readonly_reasons: Record<string, string>;
+}
+
+export interface SettingsUpdate {
+  values: Record<string, unknown>;
+  /** Een geheim expliciet wissen; leeg laten in `values` betekent ongewijzigd. */
+  clear?: string[];
+}
+
+// -------------------------------------------------------------------- backup
+
+export interface Backup {
+  name: string;
+  kind: string;
+  size_bytes: number;
+  created_at: string;
+  has_media: boolean;
+  alembic_revision: string | null;
+}
+
+export interface BackupJob {
+  action: "backup" | "restore";
+  state: "running" | "done" | "error";
+  message: string;
+  progress: number;
+  error: string | null;
+  result: string | null;
+}
+
+export interface BackupList {
+  items: Backup[];
+  job: BackupJob | null;
+  keep_auto: number;
+  keep_weekly: number;
+  backup_hour: number;
+}
+
+// ------------------------------------------------------------- installatie
+
+export interface SetupStatus {
+  required: boolean;
+}
+
+export interface SetupAdminInput {
+  email: string;
+  display_name: string;
+  password: string;
+}

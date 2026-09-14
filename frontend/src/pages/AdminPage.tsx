@@ -27,8 +27,10 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
+  IconDatabase,
   IconMap,
   IconMapPin,
+  IconSettings,
   IconPencil,
   IconPlus,
   IconSearch,
@@ -52,6 +54,8 @@ import {
   type User,
   type WindCode,
 } from "../api/types";
+import BackupTab from "./admin/BackupTab";
+import SettingsTab from "./admin/SettingsTab";
 
 export default function AdminPage() {
   return (
@@ -68,6 +72,12 @@ export default function AdminPage() {
           <Tabs.Tab value="map" leftSection={<IconMapPin size={16} />}>
             Wegenkaart
           </Tabs.Tab>
+          <Tabs.Tab value="settings" leftSection={<IconSettings size={16} />}>
+            Instellingen
+          </Tabs.Tab>
+          <Tabs.Tab value="backup" leftSection={<IconDatabase size={16} />}>
+            Backup
+          </Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="routes">
           <RoutesTab />
@@ -77,6 +87,12 @@ export default function AdminPage() {
         </Tabs.Panel>
         <Tabs.Panel value="map">
           <MapTab />
+        </Tabs.Panel>
+        <Tabs.Panel value="settings">
+          <SettingsTab />
+        </Tabs.Panel>
+        <Tabs.Panel value="backup">
+          <BackupTab />
         </Tabs.Panel>
       </Tabs>
     </Stack>

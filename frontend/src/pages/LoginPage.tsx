@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Anchor, Button, Group, PasswordInput, Stack, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { IconAlertCircle } from "@tabler/icons-react";
@@ -15,6 +15,18 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Op een verse installatie is er nog geen account om mee in te loggen; stuur
+  // de bezoeker dan meteen door naar de installatiewizard.
+  useEffect(() => {
+    if (loading || user) return;
+    api
+      .setupStatus()
+      .then((status) => {
+        if (status.required) navigate("/setup", { replace: true });
+      })
+      .catch(() => undefined);
+  }, [loading, user, navigate]);
 
   const form = useForm({
     initialValues: { email: "", password: "" },

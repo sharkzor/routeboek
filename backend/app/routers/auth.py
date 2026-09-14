@@ -53,6 +53,8 @@ from app.security import (
     verify_password,
 )
 
+from app.settings_store import is_setup_completed
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -146,6 +148,14 @@ def register(
 
 
 def _promote_first_admin(db: Session, user: User) -> None:
+    """Geef het geconfigureerde adminadres bij registratie meteen rechten.
+
+    Slaat zichzelf over zolang de setup-wizard nog open staat: daar wordt de
+    eerste beheerder expliciet aangemaakt, en dan mag een willekeurige
+    registratie geen adminrechten opleveren.
+    """
+    if not is_setup_completed(db):
+        return
     if user.email == normalize_email(get_settings().admin_email):
         user.is_admin = True
         db.commit()

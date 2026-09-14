@@ -72,7 +72,8 @@ routeboek/
 │   ├── alembic.ini
 │   ├── alembic/                      migraties
 │   └── app/
-│       ├── config.py                 Settings (pydantic-settings)
+│       ├── config.py                 Settings: standaard -> omgeving -> database
+│       ├── settings_store.py         instellingen in de database lezen/schrijven
 │       ├── db.py                     engine + sessiefactory
 │       ├── models.py                 SQLAlchemy-modellen
 │       ├── schemas.py                Pydantic in/uit-modellen
@@ -94,10 +95,14 @@ routeboek/
 │       │   ├── legality.py           controle op verboden paden (achtergrondtaak)
 │       │   ├── community.py          community-routes: import, aanmaken, upvoten
 │       │   ├── notices.py            werkzaamheden/bijzonderheden bij routes
-│       │   └── admin.py              beheer van routes (incl. promoveren) en gebruikers
+│       │   ├── setup.py              installatiewizard voor een verse omgeving
+│       │   ├── backup.py             backups maken, terugzetten, op-/afhalen
+│       │   └── admin.py              beheer van routes, gebruikers en instellingen
 │       ├── services/
 │       │   ├── rides.py              ritten-logica los van FastAPI
 │       │   ├── notices.py            meldingen: zichtbaarheid + opruimlus
+│       │   ├── backup.py             pg_dump/pg_restore, retentie, nachtelijke lus
+│       │   ├── setup.py              grendels en token van de installatiewizard
 │       │   ├── legality.py           OSM-controle op verboden paden
 │       │   └── osm_index.py          lokale wegenkaart (SQLite + R*Tree)
 │       └── water/                    overgenomen uit /home/shark/gpx
@@ -126,6 +131,8 @@ routeboek/
 ├── scripts/
 │   └── scrape_routeboek.py           eenmalige migratie van routeboek.cc
 └── data/                             volume, niet in git
+    ├── backups/                      automatische en handmatige backups (.tar.gz)
+    ├── setup-token                   token voor /setup; weg zodra de setup klaar is
     ├── seed/routes.json              gescrapete metadata (166 routes, 9,4 MB)
     ├── media/{gpx,tcx,maps}/         routebestanden en kaartafbeeldingen
     ├── cache/                        drinkwaterpunten-cache, osm_tiles/, route_maps/,
@@ -205,6 +212,8 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
   hem daarna blijven zien (uniek per rit/gebruiker)
 - `events` / `event_participants` — externe events en aanmeldingen (incl.
   vervoerskeuze per deelnemer)
+- `app_settings` — instellingen die zonder herstart aanpasbaar zijn, als platte
+  sleutel/waarde-tekst (zie §12). Ook de grendel `setup_completed` staat hier.
 
 ---
 
@@ -213,10 +222,12 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
 Dit is een publiek bereikbare applicatie. Houd je aan de volgende regels:
 
 1. **Alle API-endpoints vereisen authenticatie**, behalve `/api/auth/*`,
-   `/api/health` en `/api/telegram/webhook` (die laatste valideert in
-   plaats daarvan de geheime Telegram-header, zie §11). Gebruik de
-   dependencies uit `app/deps.py` (`current_user`, `current_admin`); voeg
-   nooit een ongeauthenticeerd endpoint toe zonder expliciete reden.
+   `/api/health`, `/api/telegram/webhook` (die valideert in plaats daarvan de
+   geheime Telegram-header, zie §11) en `/api/setup/*` (alleen zolang de
+   installatie aantoonbaar leeg is én met een geldig setup-token, zie §12).
+   Gebruik de dependencies uit `app/deps.py` (`current_user`,
+   `current_admin`); voeg nooit een ongeauthenticeerd endpoint toe zonder
+   expliciete reden.
 2. **Wachtwoorden** worden gehasht met Argon2id. Nooit ergens loggen.
 3. **Sessies** zijn serverside. De cookie `rb_session` is `HttpOnly`,
    `SameSite=Lax` en `Secure` in productie. Uitloggen trekt de sessie in de
@@ -761,9 +772,10 @@ Routes toevoegen (GPX-upload, met optioneel een TCX-bestand en/of een
 Strava-/Komoot-link), bewerken en verwijderen (`GET/PATCH/DELETE
 /api/admin/routes/{id}`; de admin-detailendpoint negeert `is_active` zodat
 ook verborgen routes te bewerken zijn), gebruikers activeren/blokkeren en
-adminrechten toekennen. Daarnaast een tabblad **Wegenkaart** met de
+adminrechten toekennen. Daarnaast drie tabbladen: **Wegenkaart** met de
 staat van de lokale OSM-kaart (aantal wegen, omvang, leeftijd) en een knop om
-hem bij te werken; zie "Controle op verboden paden".
+hem bij te werken (zie "Controle op verboden paden"), plus **Instellingen** en
+**Backup** — allebei beschreven in §12.
 
 ### Windrichting inschatten
 Sommige gemigreerde routes hadden geen windrichting-tag. Heuristiek (van de
@@ -1274,7 +1286,159 @@ ontvangt vlak voor vertrek een deelnemersoverzicht per Telegram-DM
 
 ---
 
-## 12. Toekomstplannen
+## 12. Instellingen, backup en installatie
+
+Drie samenhangende beheerfuncties die het mogelijk maken de applicatie te
+beheren en te verhuizen zonder bij de server te hoeven.
+
+### Instellingen in de database
+
+`Settings` wordt in **drie lagen** opgebouwd (`app/config.py`):
+standaardwaarden → omgeving/`.env` → de tabel `app_settings`. De laatste laag
+wint, zodat een beheerder de meeste instellingen via de UI kan wijzigen en die
+**meteen actief** zijn, zonder herstart.
+
+- **`RUNTIME_SETTING_KEYS` is een strikte whitelist van 33 velden** en tevens
+  de kritieke beveiligingsmaatregel: `settings_store.save_overrides()` gooit
+  een `ValueError` bij elke sleutel die er niet in staat. Zonder die controle
+  zou een beheerder (of een fout in de frontend) `database_url` of
+  `secret_key` kunnen overschrijven. Voeg dus **nooit** een veld toe zonder na
+  te gaan wat een aanvaller ermee zou kunnen.
+- **Wat bewust een omgevingsvariabele blíjft**, en waarom:
+  - `database_url`, `data_dir` — kip-en-ei: nodig vóórdat de database gelezen
+    kan worden.
+  - `port`, `log_level`, `cookie_secure` — eigenschappen van de container/
+    deploymethode, niet van de club.
+  - `secret_key` — mag niet in een backup terechtkomen; anders kan wie een
+    backupbestand bemachtigt sessiecookies vervalsen.
+  - `nl_gpx_url`, `user_agent` — de eerste wordt **server-side opgehaald**
+    (`water/waterpoints_nl.py`); instelbaar maken zou een SSRF-primitive
+    opleveren waarmee een beheerder de server interne adressen kan laten
+    benaderen.
+  - `admin_email`, `admin_name` — bootstrap-waarden, alleen relevant vóórdat
+    er een database is.
+  - `waypoint_*`, `roadworks_*`, `nl_cache_ttl_seconds` — interne plumbing,
+    bewust niet in de UI.
+- **Waarden worden altijd als tekst opgeslagen**, net als een
+  omgevingsvariabele; pydantic doet de typeomzetting. Zo is er één
+  validatiepad in plaats van twee.
+- **Geheimen** (`SECRET_SETTING_KEYS`: het SMTP-wachtwoord, het bot-token en
+  het webhook-geheim) verlaten de server nooit. De API geeft per geheim alleen
+  terug *of* het gevuld is. In de UI betekent een leeg veld daarom
+  "ongewijzigd"; wissen gaat via een aparte knop, zodat een lege invoer nooit
+  per ongeluk een werkend SMTP-wachtwoord weggooit.
+- **Twee recursievalkuilen** (opgelost, niet opnieuw introduceren):
+  1. `db.py` roept `get_settings()` aan tijdens het importeren, terwijl
+     `load_overrides()` juist `db.py` nodig heeft. Een `threading.local`-vlag
+     `_loading` geeft tijdens dat venster de omgevingswaarden terug.
+  2. Een eerdere versie gebruikte `@lru_cache`, waardoor de terugval bij een
+     tijdelijk onbereikbare database **permanent** gecachet werd. Nu wordt de
+     terugval bewust *niet* gecachet, zodat de volgende aanroep het opnieuw
+     probeert.
+- API: `GET/PUT /api/admin/settings` plus `POST /api/admin/settings/test-mail`
+  en `.../test-telegram`. Die tests gebruiken de **opgeslagen** instellingen,
+  niet wat er in het formulier staat — eerst opslaan dus.
+- Frontend: `pages/admin/SettingsTab.tsx` met de veldbeschrijvingen in
+  `pages/admin/settingsFields.ts`. Die sleutels moeten exact gelijk zijn aan
+  `RUNTIME_SETTING_KEYS`; lopen ze uit de pas, dan verdwijnt een veld uit het
+  formulier of weigert de server het met een 422.
+
+### Backup en restore
+
+`app/services/backup.py` + `app/routers/backup.py`, tabblad **Backup**.
+
+- Een backup is een **`.tar.gz` met een `manifest.json`** (formaatversie,
+  soort, tijdstip, of er media in zit, en de Alembic-revisie), de `pg_dump` in
+  custom formaat, en optioneel de mediamap. Een databasebackup is ~1,3 MB; met
+  media wordt het ~140 MB.
+- **De Alembic-revisie in het manifest is essentieel**: na `pg_restore` draait
+  `alembic upgrade head`, zodat een backup van een oudere versie gewoon
+  teruggezet kan worden op een nieuwere app.
+- **`postgresql-client-18` komt uit de PGDG-repo**, niet uit Debian. Debian
+  trixie levert alleen client 17, en die **weigert** tegen een server 18. Zie
+  de `Dockerfile`; haal die repo-regels niet weg.
+- **`pg_restore` geeft ook bij onschuldige waarschuwingen een exitcode ≠ 0.**
+  Daarom faalt `_run_pg_restore()` alleen wanneer er daadwerkelijk `"error"`
+  in stderr staat.
+- **Tar-hardening is niet optioneel.** `extractall` is standaard onveilig;
+  `_safe_members()` weigert absolute paden, `..`, symlinks en niet-reguliere
+  bestandstypen **vóór** het uitpakken, en er wordt daarnaast met
+  `filter="data"` uitgepakt. Getest met een geprepareerd archief van elk van
+  de drie soorten.
+- **Een backup wordt eerst als `.part` geschreven** en pas daarna hernoemd, zo
+  laat een afgebroken backup nooit een half bestand achter dat er geldig
+  uitziet.
+- **Na een restore herstart de applicatie zichzelf** (SIGTERM via een
+  `threading.Timer`; Docker start hem terug dankzij `restart:
+  unless-stopped`). Dat is opzettelijk: achtergrondthreads, de
+  verbindingspool, de instellingencache en drie bestandscaches zijn anders
+  niet schoon. De frontend pollt daarna `/api/health` en laadt zichzelf
+  opnieuw.
+- **Nachtelijke lus** (`start_backup_loop()`, gestart vanuit `lifespan()`,
+  zelfde patroon als `services/route_ratings.py`): elke nacht om 01:00 een
+  databasebackup, op zondagnacht bovendien een weekkopie. Retentie bewaart
+  `KEEP_AUTO=3` nachtelijke en `KEEP_WEEKLY=1` wekelijkse backup en **raakt
+  handmatige backups nooit aan**. Media gaan bewust niet mee in de nachtelijke
+  backup: die veranderen zelden en zouden elke nacht 140 MB kosten.
+- **Een backupbestand bevat de instellingen en dus de SMTP- en
+  Telegram-geheimen.** Behandel het als een wachtwoordkluis. De
+  `secret_key` zit er juist *niet* in (zie hierboven).
+
+### Installatiewizard
+
+`app/services/setup.py` + `app/routers/setup.py`, frontend
+`pages/SetupPage.tsx` op `/setup`. Bedoeld voor een verse omgeving — en
+daarmee het pad om te verhuizen naar een hoster of Azure.
+
+- **Drie onafhankelijke grendels**, alle drie vereist: (1) er is geen enkele
+  gebruiker, (2) `setup_completed` staat niet in `app_settings`, (3) een
+  geldig token in de header `X-Setup-Token`.
+- **Fail closed**: gaat er íets mis bij het bepalen van de status, dan is de
+  setup *niet* toegestaan. Een databasestoring mag nooit een installatiewizard
+  openzetten.
+- **Eén gedeelde `Depends(allow_setup)`** op elk wijzigend endpoint, zodat je
+  hem nergens kunt vergeten wanneer er later een stap bijkomt.
+- **Het token** komt uit `SETUP_TOKEN` of wordt bij het opstarten gegenereerd,
+  in de logs gezet en in `data/setup-token` (0600) bewaard. Vergelijking gaat
+  constant-time; er geldt een limiet van 10 pogingen per 5 minuten. Zodra de
+  installatie voltooid is, wordt het bestand opgeruimd.
+- **Bewust maar drie ongeauthenticeerde endpoints.** Een eerder ontwerp had er
+  acht (één per wizardstap), maar dat was zowel functioneel kapot als onnodig
+  onbeveiligd: de grendel "geen gebruikers" slaat dicht op het moment dat het
+  beheerdersaccount wordt aangemaakt, dus alle latere stappen zouden daarna
+  een 409 geven. Nu logt `POST /api/setup/admin` de nieuwe beheerder meteen in
+  en lopen de overige instellingen via het gewone, geauthenticeerde
+  `/api/admin/settings`.
+- `GET /api/setup/status` vereist géén token: de frontend moet kunnen weten of
+  hij de wizard moet tonen. Het lekt hooguit dat de installatie leeg is.
+- **Twee bootstrap-botsingen opgelost**: zowel `seed.ensure_admin()` als
+  `auth._promote_first_admin()` zouden een gebruiker aanmaken respectievelijk
+  adminrechten geven en zo grendel 1 dichtslaan. Beide slaan zichzelf over
+  zolang `is_setup_completed(db)` onwaar is.
+- Het beheerdersaccount uit de wizard is direct bevestigd
+  (`email_verified_at`): op een verse installatie is de mail nog niet
+  ingesteld, dus e-mailverificatie eisen zou de beheerder buitensluiten.
+
+### Verhuizen naar een andere server
+
+1. Maak op de oude server een **volledige backup incl. media** en download hem.
+2. Zet op de nieuwe omgeving een Postgres 18 klaar en start de container met
+   alleen `DATABASE_URL`, `SECRET_KEY` en `BASE_URL` gezet. Het entrypoint
+   draait de migraties op de lege database.
+3. Haal het setup-token uit de logs (`docker compose logs app`) en ga naar
+   `/setup`.
+4. Kies "Backup terugzetten" en upload het bestand. De app herstart zichzelf.
+5. Log in met je bestaande account. Alle instellingen, routes, leden en ritten
+   zijn er weer — alleen de omgevingsvariabelen uit de lijst hierboven moeten
+   op de nieuwe server kloppen.
+
+> `SECRET_KEY` zit bewust niet in de backup. Neem hem over van de oude server
+> wanneer je wilt dat bestaande sessies geldig blijven; genereer anders een
+> nieuwe, waarna iedereen opnieuw moet inloggen.
+
+---
+
+## 13. Toekomstplannen
 
 Houd hier rekening mee bij het ontwerp:
 

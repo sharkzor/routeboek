@@ -19,13 +19,28 @@ logger = logging.getLogger(__name__)
 
 
 def send_mail(to: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+    """Verstuur een bericht; fouten worden gelogd, niet doorgegeven.
+
+    Bewust stilzwijgend: deze functie draait in een BackgroundTask achter
+    endpoints die niet mogen verraden of een e-mailadres bestaat. Wie de fout
+    juist wél wil zien (de testknop op de beheerpagina) gebruikt
+    `send_mail_strict()`.
+    """
+    try:
+        send_mail_strict(to, subject, text_body, html_body)
+    except Exception as exc:
+        logger.error("Versturen van e-mail naar %s mislukt: %s", to, exc)
+
+
+def send_mail_strict(
+    to: str, subject: str, text_body: str, html_body: str | None = None
+) -> None:
+    """Als `send_mail()`, maar laat een SMTP-fout door naar de aanroeper."""
     settings = get_settings()
     if not settings.mail_enabled:
-        logger.warning("E-mail staat uit; bericht aan %s niet verstuurd", to)
-        return
+        raise RuntimeError("E-mail staat uit (mail_enabled).")
     if not settings.smtp_host or not settings.mail_from:
-        logger.error("SMTP is niet geconfigureerd; bericht aan %s niet verstuurd", to)
-        return
+        raise RuntimeError("SMTP is niet geconfigureerd (host of afzender ontbreekt).")
 
     message = EmailMessage()
     message["Subject"] = subject
@@ -41,28 +56,25 @@ def send_mail(to: str, subject: str, text_body: str, html_body: str | None = Non
     if html_body:
         message.add_alternative(html_body, subtype="html")
 
-    try:
-        context = ssl.create_default_context()
-        if settings.smtp_ssl:
-            with smtplib.SMTP_SSL(
-                settings.smtp_host,
-                settings.smtp_port,
-                timeout=settings.smtp_timeout,
-                context=context,
-            ) as server:
-                _login_and_send(server, message, settings)
-        else:
-            with smtplib.SMTP(
-                settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout
-            ) as server:
+    context = ssl.create_default_context()
+    if settings.smtp_ssl:
+        with smtplib.SMTP_SSL(
+            settings.smtp_host,
+            settings.smtp_port,
+            timeout=settings.smtp_timeout,
+            context=context,
+        ) as server:
+            _login_and_send(server, message, settings)
+    else:
+        with smtplib.SMTP(
+            settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout
+        ) as server:
+            server.ehlo()
+            if settings.smtp_starttls:
+                server.starttls(context=context)
                 server.ehlo()
-                if settings.smtp_starttls:
-                    server.starttls(context=context)
-                    server.ehlo()
-                _login_and_send(server, message, settings)
-        logger.info("E-mail '%s' verstuurd naar %s", subject, to)
-    except Exception as exc:
-        logger.error("Versturen van e-mail naar %s mislukt: %s", to, exc)
+            _login_and_send(server, message, settings)
+    logger.info("E-mail '%s' verstuurd naar %s", subject, to)
 
 
 def _login_and_send(server: smtplib.SMTP, message: EmailMessage, settings) -> None:
@@ -227,3 +239,27 @@ def send_route_report_mail(
   <p style="margin:28px 0"><a href="{route_url}" style="{_BUTTON}">Bekijk de route</a></p>
 </div>"""
     send_mail(to, subject, text, html)
+
+
+def send_test_mail(to: str, name: str) -> None:
+    """Testmail vanaf de beheerpagina; fouten komen bij de beheerder terecht."""
+    settings = get_settings()
+    subject = f"Testmail van {settings.app_name}"
+    text = (
+        f"Hallo {name},\n\n"
+        "Dit is een testbericht vanaf de beheerpagina. Ontvang je deze mail, "
+        "dan zijn de SMTP-instellingen in orde.\n\n"
+        f"Server: {settings.smtp_host}:{settings.smtp_port}\n"
+        f"Afzender: {settings.mail_from}\n"
+    )
+    html = f"""\
+<div style="{_STYLE}">
+  <h2 style="color:#F4244E;margin-bottom:4px">De mailinstellingen werken</h2>
+  <p>Hallo {name}, dit is een testbericht vanaf de beheerpagina van
+     {settings.app_name}.</p>
+  <p style="font-size:13px;color:#616e7c">
+    Server: {settings.smtp_host}:{settings.smtp_port}<br />
+    Afzender: {settings.mail_from}
+  </p>
+</div>"""
+    send_mail_strict(to, subject, text, html)

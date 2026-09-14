@@ -598,3 +598,29 @@ class RouteNotice(Base):
     routes: Mapped[list[Route]] = relationship(
         secondary=route_notice_routes, lazy="selectin", order_by="Route.name"
     )
+
+
+class AppSetting(Base):
+    """Instelling die tijdens het draaien aangepast mag worden.
+
+    Bewust een sleutel/waarde-tabel en geen kolom per instelling: zo vereist een
+    nieuwe instelling nooit een migratie. `key` is exact de veldnaam uit
+    `app.config.Settings`, en `value` staat altijd als tekst opgeslagen — net
+    zoals een omgevingsvariabele. Pydantic doet de omzetting naar int/bool/float,
+    zodat er maar één validatiepad bestaat.
+
+    Welke sleutels hier gelezen en geschreven mogen worden staat in
+    `app.config.RUNTIME_SETTING_KEYS`; alles daarbuiten wordt genegeerd bij het
+    lezen en geweigerd bij het schrijven.
+    """
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+    updated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )

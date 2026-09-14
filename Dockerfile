@@ -24,8 +24,23 @@ WORKDIR /app
 
 # osmium-tool bouwt de lokale wegenkaart op (zie app/services/osm_index.py).
 # Het zware werk daarvan is C++; Python leest alleen het resultaat.
+#
+# postgresql-client-18 levert pg_dump/pg_restore voor de backupfunctie. Dat moet
+# uit de PGDG-repo komen: Debian trixie levert alleen versie 17, en die weigert
+# een dump te maken van een server van versie 18.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends osmium-tool \
+    && apt-get install -y --no-install-recommends \
+        osmium-tool curl ca-certificates gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get purge -y gnupg \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./
@@ -40,7 +55,7 @@ COPY --from=frontend /build/dist ./app/static
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && useradd --create-home --uid 10001 appuser \
-    && mkdir -p /app/data/cache /app/data/tmp /app/data/media /app/data/osm \
+    && mkdir -p /app/data/cache /app/data/tmp /app/data/media /app/data/osm /app/data/backups \
     && chown -R appuser:appuser /app
 
 USER appuser

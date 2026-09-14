@@ -20,6 +20,7 @@ from app.db import SessionLocal
 from app.models import Route, RouteType, User
 from app.rating import recompute_rating
 from app.security import hash_password, new_token, normalize_email
+from app.settings_store import is_setup_completed
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,11 @@ def ensure_admin() -> None:
     Bestaat het account nog niet, dan wordt het aangemaakt met een willekeurig
     wachtwoord. De beheerder gebruikt daarna 'wachtwoord vergeten'. Zo staat er
     nooit een bekend wachtwoord in de database of in de logs.
+
+    Draait **alleen bij een al ingerichte installatie**. Bij een verse database
+    zou dit meteen een account aanmaken, waardoor de setup-wizard (die juist
+    vereist dat er nog geen gebruiker is) nooit zou verschijnen. Daar maakt de
+    wizard zelf de eerste beheerder aan.
     """
     settings = get_settings()
     email = normalize_email(settings.admin_email)
@@ -95,6 +101,13 @@ def ensure_admin() -> None:
         return
 
     with SessionLocal() as db:
+        if not is_setup_completed(db):
+            logger.info(
+                "Installatie nog niet voltooid; beheerder wordt via de "
+                "setup-wizard aangemaakt."
+            )
+            return
+
         user = db.scalar(select(User).where(User.email == email))
         if user is None:
             user = User(

@@ -17,9 +17,10 @@ from fastapi import (
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.config import SECRET_SETTING_KEYS, get_settings
 from app.db import get_db
 from app.deps import current_admin
+from app.mail import send_test_mail
 from app.models import Route, RouteOrigin, RouteType, User, utcnow
 from app.routers.routes import to_detail, to_summary
 from app.routes_common import slugify, track_stats, unique_slug
@@ -31,10 +32,15 @@ from app.schemas import (
     RouteDetail,
     RouteSummary,
     RouteUpdateIn,
+    SettingsOut,
+    SettingsUpdateIn,
+    TestMailIn,
     UserOut,
 )
 from app.security import revoke_all_sessions
+from app import settings_store
 from app.services import osm_index
+from app.services import telegram as telegram_service
 from app.water import gpx_service
 
 logger = logging.getLogger(__name__)
@@ -368,3 +374,127 @@ def refresh_map(admin: User = Depends(current_admin)) -> OsmMapStatusOut:
     osm_index.start_refresh()
     logger.info("Wegenkaart handmatig bijgewerkt door %s", admin.email)
     return _map_status()
+
+
+# -------------------------------------------------------------- instellingen
+# Instellingen staan in de tabel `app_settings` en werken direct door, zonder
+# herstart (zie app/config.py). Niet elk veld mag hier in: de whitelist
+# RUNTIME_SETTING_KEYS houdt bewust `database_url`, `secret_key`, `nl_gpx_url`
+# en de container-eigenschappen buiten bereik.
+
+
+@router.get("/settings", response_model=SettingsOut)
+def read_settings(admin: User = Depends(current_admin)) -> SettingsOut:
+    return SettingsOut(
+        values=settings_store.current_values(),
+        secrets_set=settings_store.secret_flags(),
+        readonly=settings_store.readonly_values(),
+        readonly_reasons=settings_store.READONLY_REASONS,
+    )
+
+
+@router.put("/settings", response_model=SettingsOut)
+def update_settings(
+    payload: SettingsUpdateIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(current_admin),
+) -> SettingsOut:
+    # Een leeg gelaten geheim betekent "ongewijzigd"; zonder deze regel zou het
+    # formulier bij elke keer opslaan het wachtwoord en de tokens wissen.
+    values = {
+        key: value
+        for key, value in payload.values.items()
+        if not (key in SECRET_SETTING_KEYS and value in ("", None))
+    }
+    try:
+        settings_store.save_overrides(
+            db, values, clear=payload.clear, actor_id=admin.id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    logger.info(
+        "Instellingen gewijzigd door %s: %s",
+        admin.email,
+        ", ".join(sorted(set(values) | set(payload.clear))) or "(niets)",
+    )
+
+    # De webhook hangt aan base_url en het bot-token; wijzigt daar iets, dan moet
+    # Telegram opnieuw te horen krijgen waar hij moet aankloppen.
+    if {"base_url", "telegram_bot_token", "telegram_webhook_secret"} & (
+        set(values) | set(payload.clear)
+    ):
+        try:
+            telegram_service.ensure_webhook()
+        except Exception:
+            logger.exception("Telegram-webhook opnieuw registreren mislukt")
+
+    return SettingsOut(
+        values=settings_store.current_values(),
+        secrets_set=settings_store.secret_flags(),
+        readonly=settings_store.readonly_values(),
+        readonly_reasons=settings_store.READONLY_REASONS,
+    )
+
+
+@router.post("/settings/test-mail", response_model=Message)
+def test_mail(
+    payload: TestMailIn,
+    admin: User = Depends(current_admin),
+) -> Message:
+    """Stuur een testmail en geef een eventuele SMTP-fout letterlijk terug.
+
+    Hier mag de fout wél zichtbaar zijn: dit is een beheerdersdiagnose achter
+    authenticatie, geen publiek endpoint. De anti-enumeratieregel die bij
+    registratie en wachtwoordherstel geldt, is hier niet van toepassing.
+
+    Bewust synchroon (geen BackgroundTask): de beheerder wil juist wachten op het
+    antwoord, want dat antwoord is het hele doel van de knop.
+    """
+    settings = get_settings()
+    target = str(payload.to) if payload.to else admin.email
+    if not settings.mail_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="E-mail staat uit (mail_enabled). Zet die eerst aan.",
+        )
+    try:
+        send_test_mail(target, admin.display_name)
+    except Exception as exc:
+        logger.warning("Testmail naar %s mislukt: %s", target, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Versturen mislukt: {exc}",
+        ) from exc
+    return Message(detail=f"Testmail verstuurd naar {target}.")
+
+
+@router.post("/settings/test-telegram", response_model=Message)
+def test_telegram(admin: User = Depends(current_admin)) -> Message:
+    """Post een testbericht in het clubkanaal."""
+    settings = get_settings()
+    if not settings.telegram_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Er is geen Telegram-bot-token ingesteld.",
+        )
+    if not settings.telegram_channel_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Er is geen kanaal-id ingesteld.",
+        )
+    try:
+        telegram_service.send_message(
+            settings.telegram_channel_id,
+            f"✅ Testbericht vanuit {settings.app_name}. "
+            f"De koppeling met dit kanaal werkt.",
+        )
+    except Exception as exc:
+        logger.warning("Telegram-testbericht mislukt: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Versturen mislukt: {exc}",
+        ) from exc
+    return Message(detail="Testbericht in het kanaal geplaatst.")

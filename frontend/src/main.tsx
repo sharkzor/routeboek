@@ -35,6 +35,7 @@ import NewCommunityRoutePage from "./pages/NewCommunityRoutePage";
 import AdminPage from "./pages/AdminPage";
 import AccountPage from "./pages/AccountPage";
 import InfoPage from "./pages/InfoPage";
+import SetupPage from "./pages/SetupPage";
 import { theme } from "./theme";
 
 dayjs.locale("nl");
@@ -47,6 +48,7 @@ createRoot(document.getElementById("root")!).render(
         <BrowserRouter>
           <AuthProvider>
             <Routes>
+              <Route path="/setup" element={<SetupPage />} />
               <Route path="/inloggen" element={<LoginPage />} />
               <Route path="/registreren" element={<RegisterPage />} />
               <Route path="/wachtwoord-vergeten" element={<ForgotPasswordPage />} />

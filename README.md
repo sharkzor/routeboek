@@ -64,6 +64,15 @@ Productie: <https://routeboek.unencrypted.nl>
 - Beheerpagina: routes toevoegen (GPX-upload, optioneel met TCX en een
   Strava-/Komoot-link)/bewerken/verwijderen, gebruikersbeheer, en beheer van
   de lokale OSM-wegenkaart (status + handmatig verversen)
+- **Instellingen via de beheerpagina**: SMTP, Telegram, sessieduur,
+  lockout-beleid en waterpunt-standaarden staan in de database en zijn
+  zonder herstart aan te passen, inclusief testknoppen voor mail en Telegram
+- **Backup en restore**: elke nacht om 01:00 automatisch een databasebackup
+  (de laatste 3 plus een wekelijkse van zondagnacht blijven staan), plus
+  handmatige backups met of zonder media, downloaden, uploaden en terugzetten
+- **Installatiewizard** (`/setup`) voor een verse omgeving: beheerdersaccount
+  aanmaken óf een backup van een andere server terugzetten — het bedoelde pad
+  om te verhuizen naar een hoster of Azure
 - **Telegram-integratie**: nieuwe ritten worden automatisch in het
   clubkanaal geplaatst (bewerken/annuleren werkt het bestaande
   kanaalbericht bij), en de wegkapitein ontvangt vlak voor vertrek een
@@ -198,6 +207,28 @@ npm run dev
 
 De Vite-devserver proxyt API-calls naar `127.0.0.1:8083` (zie
 `frontend/vite.config.ts`).
+
+## Verhuizen naar een andere server
+
+De applicatie is zo opgezet dat verhuizen geen handwerk in de database vergt:
+vrijwel alle instellingen staan in de database en gaan dus mee in een backup.
+
+1. Maak op de oude server via **Beheer → Backup** een *volledige backup incl.
+   media* en download het bestand.
+2. Zet op de nieuwe omgeving een PostgreSQL 18 klaar en start de container met
+   alleen `DATABASE_URL`, `SECRET_KEY` en `BASE_URL` ingevuld. Het entrypoint
+   draait de migraties zelf op de lege database.
+3. Haal het setup-token uit de logs (`docker compose logs app`) en open
+   `/setup` in de browser.
+4. Kies **Backup terugzetten**, upload het bestand en wacht tot de applicatie
+   zichzelf herstart heeft.
+5. Log in met je bestaande account. Routes, leden, ritten én alle instellingen
+   zijn er weer.
+
+> `SECRET_KEY` zit bewust **niet** in de backup: anders zou wie een
+> backupbestand bemachtigt sessiecookies kunnen vervalsen. Neem hem handmatig
+> over als je wilt dat bestaande sessies geldig blijven; genereer anders een
+> nieuwe, waarna iedereen opnieuw moet inloggen.
 
 ## Database-migraties
 

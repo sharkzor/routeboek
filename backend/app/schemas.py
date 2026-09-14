@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -744,3 +745,89 @@ class AdminUserUpdateIn(BaseModel):
     is_active: bool | None = None
     display_name: str | None = Field(default=None, min_length=2, max_length=120)
     verify_email: bool | None = None
+
+# ------------------------------------------------------- instellingen (beheer)
+
+
+class SettingsOut(BaseModel):
+    """Alle instelbare velden plus, per geheim veld, of het gevuld is."""
+
+    values: dict[str, Any]
+    #: Geheimen verlaten de server nooit; hier staat alleen of er iets staat.
+    secrets_set: dict[str, bool]
+    #: Velden die bewust alleen via een omgevingsvariabele te zetten zijn,
+    #: met hun huidige waarde (geheimen gemaskeerd).
+    readonly: dict[str, str]
+    #: Per niet-instelbaar veld waaróm het niet instelbaar is.
+    readonly_reasons: dict[str, str]
+
+
+class SettingsUpdateIn(BaseModel):
+    """Gedeeltelijke update; alleen meegestuurde sleutels wijzigen."""
+
+    values: dict[str, Any] = Field(default_factory=dict)
+    #: Een geheim expliciet leegmaken. Leeg laten in `values` betekent juist
+    #: "ongewijzigd", anders zou het formulier elk geheim bij opslaan wissen.
+    clear: list[str] = Field(default_factory=list)
+
+
+class TestMailIn(BaseModel):
+    """Adres voor de testmail; leeg betekent het adres van de beheerder zelf."""
+
+    to: EmailStr | None = None
+
+
+# ------------------------------------------------------------ eerste installatie
+
+
+class SetupStatusOut(BaseModel):
+    """Of de installatiewizard nog doorlopen moet worden."""
+
+    required: bool
+
+
+class SetupAdminIn(BaseModel):
+    """De eerste beheerder van een verse installatie."""
+
+    email: EmailStr
+    display_name: str = Field(min_length=2, max_length=120)
+    password: str
+
+    _check = field_validator("password")(validate_password)
+
+
+# ------------------------------------------------------------------- backup
+
+
+class BackupOut(BaseModel):
+    """Eén backupbestand in de backupmap."""
+
+    name: str
+    #: auto | weekly | manual | onbekend
+    kind: str
+    size_bytes: int
+    created_at: datetime
+    has_media: bool
+    alembic_revision: str | None = None
+
+
+class BackupJobOut(BaseModel):
+    """Voortgang van een lopende backup- of restoretaak."""
+
+    #: backup | restore
+    action: str
+    #: running | done | error
+    state: str
+    message: str = ""
+    progress: float = 0.0
+    error: str | None = None
+    #: Naam van de betrokken backup, zodra bekend.
+    result: str | None = None
+
+
+class BackupListOut(BaseModel):
+    items: list[BackupOut]
+    job: BackupJobOut | None = None
+    keep_auto: int
+    keep_weekly: int
+    backup_hour: int

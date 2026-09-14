@@ -7,6 +7,10 @@
  */
 
 import type {
+  AppSettings,
+  Backup,
+  BackupJob,
+  BackupList,
   Comment,
   CommunityRouteCreateIn,
   EventInput,
@@ -28,6 +32,9 @@ import type {
   RouteSummary,
   QuickstartResult,
   SessionOut,
+  SettingsUpdate,
+  SetupAdminInput,
+  SetupStatus,
   TransportMode,
   TelegramLink,
   TelegramStatus,
@@ -419,4 +426,59 @@ export const api = {
     request<User>(`/api/admin/users/${id}`, { method: "PATCH", ...json(payload) }),
   adminDeleteUser: (id: number) =>
     request<{ detail: string }>(`/api/admin/users/${id}`, { method: "DELETE" }),
+
+  // ---------------------------------------------------------- instellingen
+  settings: () => request<AppSettings>("/api/admin/settings"),
+  saveSettings: (payload: SettingsUpdate) =>
+    request<AppSettings>("/api/admin/settings", { method: "PUT", ...json(payload) }),
+  testMail: (email?: string) =>
+    request<{ detail: string }>("/api/admin/settings/test-mail", {
+      method: "POST",
+      ...json({ email: email || null }),
+    }),
+  testTelegram: () =>
+    request<{ detail: string }>("/api/admin/settings/test-telegram", { method: "POST" }),
+
+  // ----------------------------------------------------------------- backup
+  backups: () => request<BackupList>("/api/admin/backups"),
+  createBackup: (includeMedia: boolean) =>
+    request<BackupJob>("/api/admin/backups" + query({ include_media: includeMedia }), {
+      method: "POST",
+    }),
+  backupJob: () => request<BackupJob | null>("/api/admin/backups/job"),
+  backupDownloadUrl: (name: string) => `/api/admin/backups/${encodeURIComponent(name)}`,
+  deleteBackup: (name: string) =>
+    request<{ detail: string }>(`/api/admin/backups/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
+  uploadBackup: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Backup>("/api/admin/backups/upload", { method: "POST", body: form });
+  },
+  restoreBackup: (name: string) =>
+    request<BackupJob>(`/api/admin/backups/${encodeURIComponent(name)}/restore`, {
+      method: "POST",
+    }),
+
+  // ------------------------------------------------------------ installatie
+  // Het setup-token gaat als losse header mee; deze endpoints draaien immers
+  // zonder sessie (zie beveiligingsregel 1 in de projectdocumentatie).
+  setupStatus: () => request<SetupStatus>("/api/setup/status"),
+  setupRestore: (file: File, token: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<BackupJob>("/api/setup/restore", {
+      method: "POST",
+      body: form,
+      headers: { "X-Setup-Token": token },
+    });
+  },
+  setupRestoreJob: () => request<BackupJob | null>("/api/setup/restore/job"),
+  setupAdmin: (payload: SetupAdminInput, token: string) =>
+    request<User>("/api/setup/admin", {
+      method: "POST",
+      ...json(payload),
+      headers: { "X-Setup-Token": token },
+    }),
 };

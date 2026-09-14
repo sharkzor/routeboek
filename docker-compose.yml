@@ -71,7 +71,6 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Routeboek Maximus Stampers}
 
-      OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter}
       DEFAULT_RADIUS_M: ${DEFAULT_RADIUS_M:-100}
       GAP_WARNING_KM: ${GAP_WARNING_KM:-40}
 
@@ -80,6 +79,10 @@ services:
       TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID:-}
       TELEGRAM_CHANNEL_INVITE_LINK: ${TELEGRAM_CHANNEL_INVITE_LINK:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+
+      # Optionele extra grendel op de installatiewizard; leeg = de app genereert
+      # er zelf een en zet 'm in de logs.
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
 
       SEED_ON_START: ${SEED_ON_START:-true}
     logging:
