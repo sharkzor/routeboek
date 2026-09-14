@@ -4,6 +4,8 @@ import {
   Button,
   Card,
   Center,
+  Divider,
+  FileInput,
   Group,
   Loader,
   NumberInput,
@@ -19,14 +21,16 @@ import {
 import { DateInput, TimeInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
-import { IconBrandTelegram, IconDeviceFloppy } from "@tabler/icons-react";
+import { IconBrandTelegram, IconDeviceFloppy, IconUpload } from "@tabler/icons-react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import {
   RIDE_TYPE_LABELS,
+  ROUTE_TYPE_LABELS,
   type RideInput,
+  type RideRouteUpload,
   type RideType,
   type RouteSummary,
   type RouteType,
@@ -90,6 +94,16 @@ export default function RideFormPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [defaultsLabel, setDefaultsLabel] = useState<string | null>(null);
+
+  // "Eigen route": een uitzondering die (nog) niet in het routeboek staat.
+  // Wordt bij het opslaan een community-route (zie RideRouteUpload).
+  const [ownRoute, setOwnRoute] = useState(!editing && params.get("eigen") === "1");
+  const [ownRouteType, setOwnRouteType] = useState<RouteType>("road");
+  const [ownStravaUrl, setOwnStravaUrl] = useState("");
+  const [ownKomootUrl, setOwnKomootUrl] = useState("");
+  const [gpxFile, setGpxFile] = useState<File | null>(null);
+  const [uploaded, setUploaded] = useState<RideRouteUpload | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const form = useForm<FormValues>({
     initialValues: {
@@ -181,7 +195,8 @@ export default function RideFormPage() {
   }, [rideId, editing]);
 
   const selectedRoute = routes.find((item) => String(item.id) === form.values.route_id);
-  const distanceLocked = Boolean(selectedRoute && selectedRoute.distance_km !== null);
+  const distanceLocked =
+    Boolean(selectedRoute && selectedRoute.distance_km !== null) || uploaded !== null;
 
   const pickRoute = (value: string | null) => {
     const routeId = value ?? "";
@@ -203,16 +218,67 @@ export default function RideFormPage() {
     form.setFieldValue("ride_type", RIDE_TYPE_FROM_ROUTE_TYPE[route.route_type]);
   };
 
+  /** Leest de GPX met hetzelfde importendpoint als de community-routes; wordt
+   *  pas als echte route opgeslagen zodra de rit zelf wordt aangemaakt. */
+  const handleGpx = async (file: File | null) => {
+    setGpxFile(file);
+    if (!file) {
+      setUploaded(null);
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    try {
+      const preview = await api.importCommunityRouteGpx(file);
+      const name = preview.name?.trim() || file.name.replace(/\.gpx$/i, "");
+      setUploaded({
+        name,
+        route_type: ownRouteType,
+        strava_url: ownStravaUrl.trim() || null,
+        komoot_url: ownKomootUrl.trim() || null,
+        distance_km: preview.distance_km,
+        elevation_m: preview.elevation_m,
+        coordinates: preview.coordinates,
+        wind_directions: preview.wind_directions,
+      });
+      if (form.values.name.trim() === "") form.setFieldValue("name", name);
+      form.setFieldValue("distance_km", Number(preview.distance_km.toFixed(1)));
+      form.setFieldValue("ride_type", RIDE_TYPE_FROM_ROUTE_TYPE[ownRouteType]);
+    } catch (err) {
+      setGpxFile(null);
+      setUploaded(null);
+      setError(err instanceof ApiError ? err.message : "Deze GPX kon niet gelezen worden.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const submit = form.onSubmit(async (values) => {
     setBusy(true);
     setError(null);
     try {
+      const routeUpload: RideRouteUpload | null =
+        ownRoute && (uploaded || ownStravaUrl.trim() || ownKomootUrl.trim())
+          ? {
+              name: values.name.trim() || uploaded?.name || "Eigen route",
+              route_type: ownRouteType,
+              strava_url: ownStravaUrl.trim() || null,
+              komoot_url: ownKomootUrl.trim() || null,
+              distance_km:
+                uploaded?.distance_km ??
+                (values.distance_km === "" ? null : Number(values.distance_km)),
+              elevation_m: uploaded?.elevation_m ?? null,
+              coordinates: uploaded?.coordinates ?? [],
+              wind_directions: uploaded?.wind_directions ?? [],
+            }
+          : null;
       const payload: RideInput = {
         name: values.name.trim(),
         owner_id: values.owner_id ? Number(values.owner_id) : null,
         ride_date: values.ride_date as string,
         ride_time: `${values.ride_time}:00`.slice(0, 8),
-        route_id: values.route_id ? Number(values.route_id) : null,
+        route_id: ownRoute ? null : values.route_id ? Number(values.route_id) : null,
+        route_upload: routeUpload,
         ride_type: values.ride_type,
         distance_km: values.distance_km === "" ? null : Number(values.distance_km),
         speed_kmh: values.speed_kmh === "" ? null : Number(values.speed_kmh),
@@ -264,22 +330,110 @@ export default function RideFormPage() {
               </Alert>
             )}
 
-            <Select
-              label="Route"
-              placeholder="Kies een route uit het routeboek"
-              searchable
-              clearable
-              nothingFoundMessage="Geen route gevonden"
-              data={routes.map((route) => ({
-                value: String(route.id),
-                label:
-                  route.distance_km !== null
-                    ? `${route.name} (${route.distance_km.toFixed(0)} km)${route.origin === "community" ? " · Community" : ""}`
-                    : `${route.name}${route.origin === "community" ? " · Community" : ""}`,
-              }))}
-              value={form.values.route_id || null}
-              onChange={pickRoute}
-            />
+            {!editing && (
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  variant={ownRoute ? "subtle" : "filled"}
+                  color="routeboek"
+                  onClick={() => setOwnRoute(false)}
+                >
+                  Route uit routeboek
+                </Button>
+                <Button
+                  size="xs"
+                  variant={ownRoute ? "filled" : "subtle"}
+                  color="routeboek"
+                  onClick={() => setOwnRoute(true)}
+                >
+                  Eigen route
+                </Button>
+              </Group>
+            )}
+
+            {ownRoute ? (
+              <Stack gap="xs">
+                <Text size="sm" fw={600}>
+                  Eigen route
+                </Text>
+                <Text size="xs" c="dimmed">
+                  Staat de route (nog) niet in het routeboek? Upload optioneel
+                  een GPX en/of geef een Strava-/Komoot-link mee. De route
+                  komt daarna ook in het community-routeboek te staan, net
+                  als wanneer je 'm daar los had aangeleverd.
+                </Text>
+                <FileInput
+                  label="GPX-bestand (optioneel)"
+                  placeholder={uploaded ? uploaded.name : "Kies een .gpx-bestand"}
+                  accept=".gpx,application/gpx+xml"
+                  clearable
+                  value={gpxFile}
+                  onChange={(file) => void handleGpx(file)}
+                  leftSection={<IconUpload size={16} />}
+                />
+                {importing && (
+                  <Text size="xs" c="dimmed">
+                    GPX inlezen…
+                  </Text>
+                )}
+                {uploaded && (
+                  <Text size="xs" c="teal.7">
+                    {uploaded.name} · {uploaded.distance_km?.toFixed(1) ?? "?"} km ·{" "}
+                    {uploaded.elevation_m != null
+                      ? `${Math.round(uploaded.elevation_m)} hm`
+                      : "? hm"}
+                  </Text>
+                )}
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                  <TextInput
+                    label="Strava-link"
+                    placeholder="https://www.strava.com/routes/…"
+                    value={ownStravaUrl}
+                    onChange={(event) => setOwnStravaUrl(event.currentTarget.value)}
+                  />
+                  <TextInput
+                    label="Komoot-link"
+                    placeholder="https://www.komoot.com/tour/…"
+                    value={ownKomootUrl}
+                    onChange={(event) => setOwnKomootUrl(event.currentTarget.value)}
+                  />
+                </SimpleGrid>
+                <Select
+                  label="Soort route"
+                  data={(Object.keys(ROUTE_TYPE_LABELS) as RouteType[]).map((value) => ({
+                    value,
+                    label: ROUTE_TYPE_LABELS[value],
+                  }))}
+                  allowDeselect={false}
+                  value={ownRouteType}
+                  onChange={(value) => {
+                    const type = (value ?? "road") as RouteType;
+                    setOwnRouteType(type);
+                    form.setFieldValue("ride_type", RIDE_TYPE_FROM_ROUTE_TYPE[type]);
+                    if (uploaded) setUploaded({ ...uploaded, route_type: type });
+                  }}
+                  w={{ base: "100%", sm: 260 }}
+                />
+                <Divider my={4} />
+              </Stack>
+            ) : (
+              <Select
+                label="Route"
+                placeholder="Kies een route uit het routeboek"
+                searchable
+                clearable
+                nothingFoundMessage="Geen route gevonden"
+                data={routes.map((route) => ({
+                  value: String(route.id),
+                  label:
+                    route.distance_km !== null
+                      ? `${route.name} (${route.distance_km.toFixed(0)} km)${route.origin === "community" ? " · Community" : ""}`
+                      : `${route.name}${route.origin === "community" ? " · Community" : ""}`,
+                }))}
+                value={form.values.route_id || null}
+                onChange={pickRoute}
+              />
+            )}
 
             <TextInput
               label="Naam"

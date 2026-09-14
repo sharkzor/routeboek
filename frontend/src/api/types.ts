@@ -180,12 +180,25 @@ export interface RideWeather {
   hours: WeatherHour[];
 }
 
+export interface RideRouteUpload {
+  name: string;
+  route_type: RouteType;
+  strava_url?: string | null;
+  komoot_url?: string | null;
+  distance_km?: number | null;
+  elevation_m?: number | null;
+  coordinates: [number, number][];
+  wind_directions?: string[];
+}
+
 export interface RideInput {
   name: string;
   owner_id?: number | null;
   ride_date: string;
   ride_time: string;
   route_id?: number | null;
+  /** Eigen route: optionele GPX + optionele Strava-/Komoot-link. */
+  route_upload?: RideRouteUpload | null;
   ride_type: RideType;
   distance_km?: number | null;
   speed_kmh?: number | null;

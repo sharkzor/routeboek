@@ -239,14 +239,24 @@ export default function RidesPage() {
             Plan een rit of meld je aan bij een clubgenoot.
           </Text>
         </Stack>
-        <Button
-          leftSection={<IconCalendarPlus size={18} />}
-          color="routeboek"
-          fullWidth={isMobile}
-          onClick={() => navigate("/ritten/nieuw")}
-        >
-          Nieuwe rit
-        </Button>
+        <Group gap="sm" wrap="wrap">
+          <Button
+            variant="light"
+            color="routeboek"
+            fullWidth={isMobile}
+            onClick={() => navigate("/ritten/nieuw?eigen=1")}
+          >
+            Eigen route
+          </Button>
+          <Button
+            leftSection={<IconCalendarPlus size={18} />}
+            color="routeboek"
+            fullWidth={isMobile}
+            onClick={() => navigate("/ritten/nieuw")}
+          >
+            Nieuwe rit
+          </Button>
+        </Group>
       </Group>
 
       <SegmentedControl

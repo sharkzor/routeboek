@@ -311,6 +311,43 @@ eerstvolgende van die twee momenten is de voorgevulde datum en tijd.
 
 Een privé-rit verschijnt niet in het standaardoverzicht.
 
+### Eigen route bij het aanmaken van een rit
+Naast "Nieuwe rit" staat op `RidesPage.tsx` een tweede knop, **"Eigen
+route"** (`/ritten/nieuw?eigen=1`), voor de uitzondering waarbij de gewenste
+route (nog) niet in het routeboek staat. Dit is bewust **geen aparte
+pagina/wizard**, maar een alternatieve sectie binnen hetzelfde
+`RideFormPage.tsx`-formulier (twee kleine knopjes wisselen tussen "Route uit
+routeboek" en "Eigen route"), zodat een wegkapitein niet eerst naar het
+community-routeboek hoeft te gaan en daarna terug naar "Nieuwe rit".
+
+- **GPX is optioneel, een Strava-/Komoot-link ook** — beide onafhankelijk
+  van elkaar. De GPX-preview hergebruikt hetzelfde importendpoint als de
+  community-wizard (`POST /api/community/routes/import`,
+  `api.importCommunityRouteGpx()`); zonder GPX blijft `coordinates` leeg en
+  vult de wegkapitein de afstand handmatig in (zoals ook al kan bij een
+  event zonder gekoppelde route).
+- **Backend**: `RideCreateIn`/`RideUpdateIn` hebben een optioneel
+  `route_upload`-veld (`RideRouteUploadIn` in `schemas.py`), naar het
+  patroon van `EventCreateIn.route_upload` bij events. `routers/rides.py`'s
+  `_create_ride_route()` maakt er, anders dan bij events, een **gewone
+  community-route** van (`origin="community"`, niet `event`): functioneel
+  identiek aan eerst los naar het community-routeboek uploaden, alleen in
+  één stap. Dat betekent dat de route na het opslaan gewoon in het
+  community-overzicht staat, upvotebaar is en **blijft bestaan** ook als
+  deze rit later een andere route krijgt of verdwijnt (`Ride.route_id` staat
+  al op `ondelete=SET NULL`) — er is dus, in tegenstelling tot
+  `_drop_event_route()`, bewust geen opruimlogica nodig.
+- Wind wordt automatisch geschat uit de meegegeven GPX
+  (`RouteImportPreview.wind_directions`, dezelfde schatting als bij een
+  reguliere GPX-import) en gemarkeerd als `wind_estimated=True`; het
+  routetype (weg/weg met gravel/gravel) kiest de wegkapitein zelf via een
+  select, die tegelijk het rittype voorinvult (zelfde
+  `RIDE_TYPE_FROM_ROUTE_TYPE`-mapping als bij het kiezen van een bestaande
+  route).
+- Alleen beschikbaar bij het **aanmaken** van een nieuwe rit, niet bij het
+  bewerken van een bestaande — bewerken gebruikt nog steeds de gewone
+  route-select (de eigen-route-knoppen worden dan niet getoond).
+
 ### Privé-ritten delen
 Een privé-rit is onzichtbaar voor wie er niet bij hoort, wat een kip-en-ei
 opleverde: je kon je niet aanmelden omdat je de rit niet zag, en je zag de rit

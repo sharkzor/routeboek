@@ -314,12 +314,46 @@ class MarkOut(BaseModel):
 # --------------------------------------------------------------------- ritten
 
 
+class RideRouteUploadIn(BaseModel):
+    """Eigen route bij het aanmaken/bewerken van een rit: een uitzondering
+    die (nog) niet in het routeboek staat. GPX-upload is optioneel (dan
+    blijven `coordinates` leeg en vult de wegkapitein de afstand zelf in);
+    een Strava-/Komoot-link kan er los van staan of ontbreken.
+
+    Wordt een gewone community-route (`origin="community"`) — functioneel
+    hetzelfde als eerst naar het community-routeboek uploaden en daarna een
+    rit aanmaken, alleen in één stap. Anders dan een event-route verschijnt
+    dit dus wél in het community-overzicht en blijft de route bestaan (en
+    herbruikbaar voor een volgende rit) ook als deze rit later verandert.
+    """
+
+    name: str = Field(min_length=2, max_length=200)
+    route_type: RouteType = RouteType.road
+    strava_url: str | None = None
+    komoot_url: str | None = None
+    distance_km: float | None = Field(default=None, ge=0, le=2000)
+    elevation_m: float | None = Field(default=None, ge=0, le=30_000)
+    coordinates: list[list[float]] = Field(default_factory=list, max_length=20_000)
+    wind_directions: list[str] = Field(default_factory=list)
+
+    @field_validator("strava_url", "komoot_url")
+    @classmethod
+    def _urls(cls, value: str | None) -> str | None:
+        return _normalize_url(value)
+
+    @field_validator("wind_directions")
+    @classmethod
+    def _winds(cls, value: list[str]) -> list[str]:
+        return _normalize_winds(value)
+
+
 class RideCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     owner_id: int | None = None
     ride_date: date
     ride_time: time
     route_id: int | None = None
+    route_upload: RideRouteUploadIn | None = None
     ride_type: RideType = RideType.race
     distance_km: float | None = Field(default=None, ge=0, le=1000)
     speed_kmh: float | None = Field(default=None, ge=0, le=60)
@@ -337,6 +371,7 @@ class RideUpdateIn(BaseModel):
     ride_date: date | None = None
     ride_time: time | None = None
     route_id: int | None = None
+    route_upload: RideRouteUploadIn | None = None
     ride_type: RideType | None = None
     distance_km: float | None = Field(default=None, ge=0, le=1000)
     speed_kmh: float | None = Field(default=None, ge=0, le=60)

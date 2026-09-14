@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import current_user
-from app.models import Ride, RideParticipant, Route, User, utcnow
+from app.models import Ride, RideParticipant, Route, RouteOrigin, User, utcnow
 from app.routers.routes import media_url
+from app.routes_common import slugify, unique_slug
 from app.schemas import (
     Message,
     RideCreateIn,
@@ -20,6 +21,7 @@ from app.schemas import (
     RideOut,
     RidePage,
     RideRouteRef,
+    RideRouteUploadIn,
     RideUpdateIn,
     RideWeatherOut,
     UserSummary,
@@ -100,6 +102,33 @@ def _resolve_route(db: Session, route_id: int | None) -> Route | None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Onbekende route."
         )
+    return route
+
+
+def _create_ride_route(db: Session, upload: RideRouteUploadIn, user: User) -> Route:
+    """Maakt een 'eigen route' uit het ritformulier (zie `RideRouteUploadIn`).
+
+    Functioneel identiek aan een community-route aanmaken via het losse
+    formulier — alleen in één stap vanuit "Eigen route" bij het aanmaken van
+    een rit. Net als community-routes blijft deze route gewoon bestaan (en
+    herbruikbaar/upvotebaar) ook als de rit later een andere route krijgt.
+    """
+    route = Route(
+        slug=unique_slug(db, slugify(upload.name)),
+        name=upload.name.strip(),
+        route_type=upload.route_type,
+        distance_km=upload.distance_km,
+        elevation_m=upload.elevation_m,
+        coordinates=upload.coordinates,
+        wind_directions=upload.wind_directions,
+        wind_estimated=bool(upload.wind_directions),
+        strava_url=upload.strava_url,
+        komoot_url=upload.komoot_url,
+        origin=RouteOrigin.community,
+        created_by_id=user.id,
+    )
+    db.add(route)
+    db.flush()
     return route
 
 
@@ -212,6 +241,8 @@ def create_ride(
             detail="Een rit in het verleden plannen kan niet.",
         )
     route = _resolve_route(db, payload.route_id)
+    if route is None and payload.route_upload is not None:
+        route = _create_ride_route(db, payload.route_upload, user)
     owner = _resolve_owner(db, payload.owner_id, user)
 
     ride = Ride(
@@ -268,8 +299,11 @@ def update_ride(
         )
 
     data = payload.model_dump(exclude_unset=True)
-    if "route_id" in data:
-        route = _resolve_route(db, data.pop("route_id"))
+    upload = data.pop("route_upload", None)
+    if "route_id" in data or upload is not None:
+        route = _resolve_route(db, data.pop("route_id", None))
+        if route is None and upload is not None:
+            route = _create_ride_route(db, RideRouteUploadIn(**upload), user)
         ride.route_id = route.id if route else None
     if "owner_id" in data:
         ride.owner_id = _resolve_owner(db, data.pop("owner_id"), user).id
