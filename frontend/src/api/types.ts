@@ -162,6 +162,11 @@ export interface RideDefaults {
   label: string;
 }
 
+export interface QuickstartResult {
+  routes: RouteSummary[];
+  wind_direction: string | null;
+}
+
 export interface WeatherHour {
   time: string;
   temp_c: number;

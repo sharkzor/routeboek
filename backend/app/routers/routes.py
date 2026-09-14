@@ -6,6 +6,7 @@ zodat ook GPX- en TCX-downloads alleen voor ingelogde gebruikers beschikbaar zij
 
 from __future__ import annotations
 
+from datetime import date, time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +18,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import current_user
 from app.models import (
+    RideType,
     Route,
     RouteCompletion,
     RouteFavorite,
@@ -27,7 +29,8 @@ from app.models import (
     User,
 )
 from app.route_thumbnail import render_route_thumbnail_png
-from app.schemas import RouteDetail, RoutePage, RouteSummary
+from app.schemas import QuickstartOut, RouteDetail, RoutePage, RouteSummary
+from app.services import weather as weather_service
 from app.water.processing import build_gpx_from_coordinates
 
 router = APIRouter(prefix="/api/routes", tags=["routes"])
@@ -250,6 +253,136 @@ def list_routes(
         page_size=page_size,
         distance_min=bounds[0],
         distance_max=bounds[1],
+    )
+
+
+# ----------------------------------------------------------------- quickstart
+
+#: Afstandsgrenzen voor Quick start-suggesties: net iets meer dan een clubmoment
+#: maar niet zo ver dat het geen "instapper" meer is.
+QUICKSTART_MIN_KM = 50
+QUICKSTART_MAX_KM = 110
+
+#: Rittype en routetype delen dezelfde onderliggende indeling
+#: (weg/weg met gravel/gravel); zie ook RIDE_TYPE_FROM_ROUTE_TYPE in
+#: frontend/src/pages/RideFormPage.tsx, waarvan dit de omgekeerde mapping is.
+QUICKSTART_ROUTE_TYPE = {
+    RideType.race: RouteType.road,
+    RideType.race_gravel: RouteType.road_gravel,
+    RideType.gravel: RouteType.gravel,
+}
+
+_reference_location_cache: tuple[float, float] | None = None
+
+
+def _club_reference_location(db: Session) -> tuple[float, float] | None:
+    """Middelpunt van de officiële routes, als locatie voor de
+    windrichting-schatting bij Quick start.
+
+    Er is geen apart opgeslagen "clubhuis"-coördinaat; het gemiddelde
+    startpunt van de officiële routes ligt vanzelf midden in het gebied waar
+    de club rijdt en is dus een robuuste, datagedreven vervanger. Wordt
+    éénmalig per procesleven berekend (de officiële routelijst verandert
+    zelden) i.p.v. bij elke Quick start-aanvraag opnieuw.
+    """
+    global _reference_location_cache
+    if _reference_location_cache is not None:
+        return _reference_location_cache
+    rows = db.scalars(
+        select(Route.coordinates).where(
+            Route.origin == RouteOrigin.official,
+            Route.is_active.is_(True),
+        )
+    ).all()
+    points = [tuple(c[0]) for c in rows if c]
+    if not points:
+        return None
+    lat = sum(p[0] for p in points) / len(points)
+    lon = sum(p[1] for p in points) / len(points)
+    _reference_location_cache = (lat, lon)
+    return _reference_location_cache
+
+
+@router.get("/quickstart", response_model=QuickstartOut)
+def quickstart_routes(
+    ride_date: date = Query(...),
+    ride_time: time = Query(...),
+    ride_type: RideType = Query(default=RideType.race),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> QuickstartOut:
+    """Top 4 routesuggesties voor Quick start: op basis van het rittype, de
+    verwachte windrichting op het gekozen moment en (bij voorkeur) de eigen
+    favorieten van het lid, met een afstand tussen 50 en 110 km.
+
+    Favoriet + windrichting-match gaat voor; is dat er te weinig, dan vult de
+    hoogste beoordeling de resterende plekken aan (zie `_sort_key` hieronder)
+    — één sortering handelt dus zowel het "genoeg eigen favorieten"- als het
+    "te weinig favorieten"-geval af.
+    """
+    route_type = QUICKSTART_ROUTE_TYPE[ride_type]
+
+    wind_direction: str | None = None
+    location = _club_reference_location(db)
+    if location is not None:
+        hourly = weather_service.get_hourly_forecast(location[0], location[1], ride_date)
+        if hourly:
+            hour = weather_service.nearest_hour(hourly, ride_time)
+            if hour is not None:
+                wind_direction = weather_service.compass4_from_degrees(
+                    hour["wind_direction_deg"]
+                )
+
+    candidates = db.scalars(
+        select(Route).where(
+            Route.is_active.is_(True),
+            Route.origin.in_([RouteOrigin.official, RouteOrigin.community]),
+            Route.route_type == route_type,
+            Route.distance_km.is_not(None),
+            Route.distance_km >= QUICKSTART_MIN_KM,
+            Route.distance_km <= QUICKSTART_MAX_KM,
+        )
+    ).all()
+
+    candidate_ids = [r.id for r in candidates]
+    favorite_ids, _ = marked_route_ids(db, user.id, candidate_ids)
+
+    def _sort_key(route: Route) -> tuple[int, int, float, int]:
+        is_favorite = route.id in favorite_ids
+        wind_match = wind_direction is not None and wind_direction in (
+            route.wind_directions or []
+        )
+        return (
+            0 if is_favorite else 1,
+            0 if wind_match else 1,
+            -(route.rating or 0),
+            -(route.rating_count or 0),
+        )
+
+    top = sorted(candidates, key=_sort_key)[:4]
+    top_ids = [r.id for r in top]
+    my_upvotes = set(
+        db.scalars(
+            select(RouteUpvote.route_id).where(
+                RouteUpvote.user_id == user.id,
+                RouteUpvote.route_id.in_(top_ids),
+            )
+        ).all()
+    )
+    favorites, ridden_ids = marked_route_ids(db, user.id, top_ids)
+
+    return QuickstartOut(
+        wind_direction=wind_direction,
+        routes=[
+            to_summary(
+                r,
+                my_upvote=r.id in my_upvotes,
+                viewer=user,
+                is_favorite=r.id in favorites,
+                is_ridden=r.id in ridden_ids,
+            )
+            for r in top
+        ],
     )
 
 

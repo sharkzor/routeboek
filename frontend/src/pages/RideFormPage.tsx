@@ -159,11 +159,17 @@ export default function RideFormPage() {
         } else {
           const defaults = await api.rideDefaults();
           if (cancelled) return;
-          setDefaultsLabel(defaults.label);
+          // Quick start geeft zijn eigen moment/rittype mee via de query-string;
+          // anders is het eerstvolgende standaard clubmoment de default.
+          const presetDate = params.get("ride_date");
+          const presetTime = params.get("ride_time");
+          const presetType = params.get("ride_type") as RideType | null;
+          setDefaultsLabel(presetDate ? null : defaults.label);
           form.setValues({
             owner_id: user ? String(user.id) : "",
-            ride_date: defaults.ride_date,
-            ride_time: defaults.ride_time.slice(0, 5),
+            ride_date: presetDate ?? defaults.ride_date,
+            ride_time: (presetTime ?? defaults.ride_time).slice(0, 5),
+            ride_type: presetType ?? "race",
           });
           // Naam en afstand volgen standaard de gekozen route.
           const preset = params.get("route");

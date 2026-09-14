@@ -15,7 +15,8 @@ import {
   Title,
 } from "@mantine/core";
 import { useDebouncedValue, useDisclosure, useMediaQuery } from "@mantine/hooks";
-import { IconFilter, IconMoodEmpty } from "@tabler/icons-react";
+import { IconBolt, IconFilter, IconMoodEmpty } from "@tabler/icons-react";
+import { Link } from "react-router";
 
 import RouteCard from "../components/RouteCard";
 import RouteFilters, { EMPTY_FILTERS, hasActiveFilters } from "../components/RouteFilters";
@@ -113,6 +114,15 @@ export default function RoutesPage() {
               Filters{hasActiveFilters(filters) ? " •" : ""}
             </Button>
           )}
+          <Button
+            variant="light"
+            color="routeboek"
+            leftSection={<IconBolt size={16} />}
+            component={Link}
+            to="/routes/quickstart"
+          >
+            Quick start
+          </Button>
           <Select
             data={SORT_OPTIONS}
             value={filters.sort}

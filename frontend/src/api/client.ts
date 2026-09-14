@@ -16,6 +16,7 @@ import type {
   RideDefaults,
   RideInput,
   RidePage,
+  RideType,
   RideWeather,
   RouteDetail,
   MarkResult,
@@ -23,6 +24,7 @@ import type {
   RouteImportPreview,
   RoutePage,
   RouteSummary,
+  QuickstartResult,
   SessionOut,
   TransportMode,
   TelegramLink,
@@ -248,6 +250,16 @@ export const api = {
     ]);
     return [...official, ...community];
   },
+
+  /** Top 4 routesuggesties voor Quick start, op basis van moment + rittype. */
+  quickstart: (rideDate: string, rideTime: string, rideType: RideType) =>
+    request<QuickstartResult>(
+      `/api/routes/quickstart?${new URLSearchParams({
+        ride_date: rideDate,
+        ride_time: rideTime,
+        ride_type: rideType,
+      }).toString()}`,
+    ),
 
   // ------------------------------------------------------- community routes
   communityRoutes: (filters: RouteFilterState, page: number, pageSize: number) =>

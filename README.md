@@ -13,6 +13,10 @@ Productie: <https://routeboek.unencrypted.nl>
   beoordeling, aanbevolen voor, favoriet/gereden), serverside gesorteerd
   (standaard op afstand kort → lang); op mobiel een uitklapbare filter-lade
   die open blijft tot je zelf "Toon resultaten" indrukt
+- **Quick start**: kies een moment en type rit en krijg automatisch 4
+  passende routes (50-110 km) op basis van de verwachte windrichting op dat
+  moment en je eigen favorieten (aangevuld met de best beoordeelde routes),
+  met een knop om alsnog zelf te bladeren in het routeboek
 - GPX/TCX-downloads, optioneel met **drinkwaterpunten** toegevoegd
   (drinkwaterpunten.nl, instelbare zoekradius)
 - **Controle op verboden paden**: achteraf checken of een route over stukken

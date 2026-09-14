@@ -301,6 +301,56 @@ kilometerbereik, windrichting (N/O/Z/W, meerdere), soort route
 (beginners / snelle groepen / toeristisch). Sortering op naam, afstand,
 hoogtemeters, beoordeling of recentheid. Filteren gebeurt **serverside**.
 
+### Quick start
+Naast de gewone filters staat op de routepagina (de belangrijkste pagina van
+de app) een knop **"Quick start"** (`/routes/quickstart`,
+`frontend/src/pages/QuickStartPage.tsx`) voor wie niet zelf wil filteren:
+kies een moment + type rit, en de app kiest zelf 4 passende routes.
+
+- **Formulier**: datum/tijd (standaard het eerstvolgende clubmoment, via
+  hetzelfde `GET /api/rides/defaults` als bij een nieuwe rit) en het rittype
+  (Race/Race met Gravel/Gravel, standaard Race). Een tekstje bovenaan legt
+  uit hoe de selectie tot stand komt (moment, windrichting, eigen
+  favorieten, afstand), zodat het geen "black box" is.
+- **Backend**: `GET /api/routes/quickstart` (`routers/routes.py`) — geen
+  aparte service-module, want de logica leunt volledig op bestaande
+  bouwstenen (`weather_service`, `RouteFavorite`, `Route.rating`).
+  1. Rittype → routetype via `QUICKSTART_ROUTE_TYPE` (dezelfde 1-op-1
+     mapping als `RIDE_TYPE_FROM_ROUTE_TYPE` in `RideFormPage.tsx`, hier de
+     backend-tegenhanger).
+  2. Windrichting op het gekozen moment: er is geen opgeslagen
+     "clubhuis"-coördinaat, dus `_club_reference_location()` gebruikt het
+     **gemiddelde startpunt van alle officiële routes** als locatie (eenmalig
+     per procesleven gecached — die lijst verandert zelden) en haalt daarmee
+     dezelfde `weather_service.get_hourly_forecast()` op als bij het
+     weerbericht per rit. `weather_service.nearest_hour()` (nieuw, naast het
+     bestaande `hours_around()`) pakt het dichtstbijzijnde uur, en
+     `compass4_from_degrees()` (nieuw, naast `compass_from_degrees()`) rondt
+     dat af naar de 4-punts richting die `Route.wind_directions` gebruikt
+     (i.t.t. de 8-punts weergave in de weerstrip van een rit). Buiten de
+     ~15-daagse Open-Meteo-horizon geeft dit gewoon `None` terug; de
+     windvoorkeur vervalt dan stilzwijgend (zie sorteerregel hieronder).
+  3. Kandidaten: actieve officiële + community-routes van het gekozen
+     routetype met een afstand tussen **50 en 110 km**
+     (`QUICKSTART_MIN_KM`/`QUICKSTART_MAX_KM`) — een harde grens, geen
+     voorkeur.
+  4. **Eén sorteersleutel regelt zowel het "genoeg eigen favorieten"- als
+     het "te weinig favorieten"-geval**: `(niet-favoriet, geen windmatch,
+     -rating, -aantal_stemmen)`. Favoriet + windmatch komt dus altijd
+     bovenaan; zijn er te weinig (of geen) favorieten, dan vullen de hoogst
+     beoordeelde routes (bij voorkeur nog steeds met windmatch) de
+     resterende plekken vanzelf aan. Er is geen aparte "fallback"-tak nodig.
+- **Frontend**: de eerste 4 suggesties worden automatisch opgehaald zodra de
+  standaarddatum/-tijd bekend zijn; wijzig je moment of type, dan haalt
+  "Toon suggesties" opnieuw op. De suggesties zijn gewone `RouteCard`s (kaart
+  + naam + afstand + hoogtemeters + beoordeling + windbadges, net als op het
+  routeoverzicht) met een extra knop **"Start deze rit"** in de footer die
+  doorstuurt naar `RideFormPage` met route, datum, tijd én rittype al
+  ingevuld (`route`/`ride_date`/`ride_time`/`ride_type`-queryparams;
+  `RideFormPage` leest die nu bewust vóór de `/api/rides/defaults`-fallback).
+  Onderaan staat een knop terug naar het gewone routeoverzicht, voor wie geen
+  van de 4 voorstellen ziet zitten.
+
 ### Rit organiseren
 Zie `rit.png`. Velden: naam (standaard de routenaam), eigenaar (wegkapitein),
 datum, tijd, route, type rit (Race / Race met Gravel / Gravel), afstand,

@@ -173,6 +173,19 @@ class RoutePage(BaseModel):
     distance_max: float | None
 
 
+class QuickstartOut(BaseModel):
+    """Resultaat van Quick start: de top 4 route-suggesties voor een moment.
+
+    `wind_direction` is de (4-punts) windrichting die op het gekozen moment
+    wordt verwacht, of `None` als daar geen voorspelling voor is (te ver
+    vooruit of in het verleden) — in dat geval is er simpelweg niet op wind
+    gesorteerd, alleen op favoriet en beoordeling.
+    """
+
+    routes: list[RouteSummary]
+    wind_direction: str | None = None
+
+
 def _normalize_winds(value: list[str]) -> list[str]:
     codes = [v.upper() for v in value]
     if set(codes) - WIND_CODES:

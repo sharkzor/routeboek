@@ -53,6 +53,18 @@ def compass_from_degrees(deg: float) -> str:
     return _COMPASS_POINTS[index]
 
 
+_COMPASS4_POINTS = ["N", "O", "Z", "W"]
+
+
+def compass4_from_degrees(deg: float) -> str:
+    """Zet een windrichting in graden om naar de 4-punts hoofdwindrichting
+    (N/O/Z/W) die `Route.wind_directions` gebruikt (zie Quick start,
+    routers/routes.py) — grover dan `compass_from_degrees`, dat de 8-punts
+    weergave in de weerstrip van een rit levert."""
+    index = round((deg % 360) / 90) % 4
+    return _COMPASS4_POINTS[index]
+
+
 def _cache_key(lat: float, lon: float, target_date: date) -> str:
     # Afronden op ~1km nauwkeurigheid is ruim genoeg voor een weersverwachting.
     return f"{lat:.2f}:{lon:.2f}:{target_date.isoformat()}"
@@ -148,3 +160,19 @@ def hours_around(
         if hour in wanted:
             picked.append(entry)
     return picked
+
+
+def nearest_hour(hourly: list[dict], target_time: time_cls) -> dict | None:
+    """Het uurbericht-item dat het dichtst bij een tijdstip ligt (voor Quick
+    start, dat maar één moment nodig heeft i.p.v. een venster)."""
+    best: dict | None = None
+    best_diff = None
+    for entry in hourly:
+        try:
+            hour = int(entry["time"][11:13])
+        except (KeyError, ValueError, TypeError):
+            continue
+        diff = min((hour - target_time.hour) % 24, (target_time.hour - hour) % 24)
+        if best_diff is None or diff < best_diff:
+            best, best_diff = entry, diff
+    return best

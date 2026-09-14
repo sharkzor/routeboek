@@ -22,6 +22,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import VerifyPage from "./pages/VerifyPage";
 import RoutesPage from "./pages/RoutesPage";
 import RouteDetailPage from "./pages/RouteDetailPage";
+import QuickStartPage from "./pages/QuickStartPage";
 import RidesPage from "./pages/RidesPage";
 import RideDetailPage from "./pages/RideDetailPage";
 import RideFormPage from "./pages/RideFormPage";
@@ -59,6 +60,7 @@ createRoot(document.getElementById("root")!).render(
               >
                 <Route path="/" element={<RoutesPage />} />
                 <Route path="/routes" element={<RoutesPage />} />
+                <Route path="/routes/quickstart" element={<QuickStartPage />} />
                 <Route path="/routes/:routeId" element={<RouteDetailPage />} />
                 <Route path="/ritten" element={<RidesPage />} />
                 <Route path="/ritten/nieuw" element={<RideFormPage />} />
