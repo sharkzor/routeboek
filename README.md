@@ -54,6 +54,11 @@ Productie: <https://routeboek.unencrypted.nl>
   routeboek.cc-waardering), **favorieten** en **"gereden"-markering** per lid
 - **Route melden**: knop op de routepagina om beheerders per mail te laten
   weten dat er iets mis is met een route (vrije tekst)
+- **Werkzaamheden en bijzonderheden**: eigen overzicht waar leden tijdelijke
+  meldingen plaatsen (werkzaamheden, gevaar of een andere bijzonderheid) met
+  een einddatum en een koppeling aan een of meer routes. Ze verschijnen in een
+  vak onderaan de betreffende routepagina en verdwijnen automatisch zodra de
+  einddatum verstreken is
 - Automatisch gegenereerde kaartminiatuur (OSM-achtergrond + routelijn) voor
   routes zonder eigen kaartbestand (community- en zelf toegevoegde routes)
 - Beheerpagina: routes toevoegen (GPX-upload, optioneel met TCX en een

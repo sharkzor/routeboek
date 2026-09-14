@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from app.models import EventType, RideType, RouteType, TransportMode
+from app.models import EventType, NoticeKind, RideType, RouteType, TransportMode
 
 WIND_CODES = {"N", "O", "Z", "W"}
 CATEGORY_CODES = {"beginners", "high_pace", "tourist"}
@@ -93,6 +93,74 @@ class SessionOut(BaseModel):
     csrf_token: str
 
 
+# ----------------------------------------- werkzaamheden en bijzonderheden
+
+
+class NoticeRouteRef(BaseModel):
+    """Routeverwijzing binnen een melding; bewust klein gehouden."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    distance_km: float | None = None
+
+
+class NoticeOut(BaseModel):
+    id: int
+    kind: NoticeKind
+    title: str
+    description: str
+    start_date: date
+    end_date: date
+    created_at: datetime
+    created_by: str | None = None
+    routes: list[NoticeRouteRef] = []
+    #: False zolang de melding nog niet begonnen is (start_date in de toekomst).
+    is_active: bool = True
+    can_edit: bool = False
+
+
+class NoticeCreateIn(BaseModel):
+    kind: NoticeKind = NoticeKind.works
+    title: str = Field(min_length=3, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    #: Leeg laten betekent "vanaf vandaag".
+    start_date: date | None = None
+    end_date: date
+    route_ids: list[int] = Field(min_length=1, max_length=50)
+
+    @field_validator("title", "description")
+    @classmethod
+    def _strip(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def _check_dates(self) -> NoticeCreateIn:
+        start = self.start_date or date.today()
+        self.start_date = start
+        if self.end_date < start:
+            raise ValueError("De einddatum kan niet voor de startdatum liggen.")
+        # Een melding die al verlopen is, zou meteen weer worden opgeruimd.
+        if self.end_date < date.today():
+            raise ValueError("De einddatum ligt in het verleden.")
+        return self
+
+
+class NoticeUpdateIn(BaseModel):
+    kind: NoticeKind | None = None
+    title: str | None = Field(default=None, min_length=3, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    start_date: date | None = None
+    end_date: date | None = None
+    route_ids: list[int] | None = Field(default=None, min_length=1, max_length=50)
+
+    @field_validator("title", "description")
+    @classmethod
+    def _strip(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+
 # --------------------------------------------------------------------- routes
 
 
@@ -130,6 +198,9 @@ class RouteDetail(RouteSummary):
     coordinates: list[list[float]]
     created_at: datetime
     my_rating: int | None = None
+    #: Lopende en geplande meldingen; alleen op de detailpagina, niet in
+    #: RouteSummary, om N+1-queries op het routeoverzicht te voorkomen.
+    notices: list[NoticeOut] = []
 
 
 class CommentOut(BaseModel):

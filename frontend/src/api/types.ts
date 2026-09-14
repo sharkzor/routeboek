@@ -4,6 +4,7 @@ export type RouteType = "road" | "road_gravel" | "gravel";
 export type RideType = "race" | "race_gravel" | "gravel";
 export type EventType = "sportive" | "race" | "multiday" | "gravel" | "other";
 export type TransportMode = "car" | "train" | "own_transport" | "bike";
+export type NoticeKind = "works" | "hazard" | "info";
 export type WindCode = "N" | "O" | "Z" | "W";
 export type CategoryCode = "beginners" | "high_pace" | "tourist";
 
@@ -60,6 +61,40 @@ export interface RouteDetail extends RouteSummary {
   coordinates: [number, number][];
   created_at: string;
   my_rating: number | null;
+  /** Lopende en geplande meldingen; alleen op de detailpagina gevuld. */
+  notices: Notice[];
+}
+
+export interface NoticeRouteRef {
+  id: number;
+  name: string;
+  distance_km: number | null;
+}
+
+export interface Notice {
+  id: number;
+  kind: NoticeKind;
+  title: string;
+  description: string;
+  /** "YYYY-MM-DD" */
+  start_date: string;
+  /** "YYYY-MM-DD" */
+  end_date: string;
+  created_at: string;
+  created_by: string | null;
+  routes: NoticeRouteRef[];
+  /** False zolang de melding nog niet begonnen is. */
+  is_active: boolean;
+  can_edit: boolean;
+}
+
+export interface NoticeInput {
+  kind: NoticeKind;
+  title: string;
+  description: string;
+  start_date: string | null;
+  end_date: string;
+  route_ids: number[];
 }
 
 export interface RouteImportPreview {
@@ -387,6 +422,18 @@ export const TRANSPORT_LABELS: Record<TransportMode, string> = {
   train: "Trein",
   own_transport: "Eigen gelegenheid",
   bike: "Fiets ernaartoe",
+};
+
+export const NOTICE_KIND_LABELS: Record<NoticeKind, string> = {
+  works: "Werkzaamheden",
+  hazard: "Gevaar",
+  info: "Bijzonderheid",
+};
+
+export const NOTICE_KIND_COLORS: Record<NoticeKind, string> = {
+  works: "orange",
+  hazard: "red",
+  info: "blue",
 };
 
 export const WIND_LABELS: Record<WindCode, string> = {

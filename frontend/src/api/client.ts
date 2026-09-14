@@ -11,6 +11,8 @@ import type {
   CommunityRouteCreateIn,
   EventInput,
   EventItem,
+  Notice,
+  NoticeInput,
   RatingResult,
   Ride,
   RideDefaults,
@@ -341,6 +343,16 @@ export const api = {
     request<EventItem>(`/api/events/${id}/join`, { method: "POST", ...json({ transport }) }),
   leaveEvent: (id: number) =>
     request<EventItem>(`/api/events/${id}/leave`, { method: "POST" }),
+
+  // -------------------------------- werkzaamheden en bijzonderheden
+  notices: () => request<Notice[]>("/api/notices"),
+  notice: (id: number) => request<Notice>(`/api/notices/${id}`),
+  createNotice: (payload: NoticeInput) =>
+    request<Notice>("/api/notices", { method: "POST", ...json(payload) }),
+  updateNotice: (id: number, payload: Partial<NoticeInput>) =>
+    request<Notice>(`/api/notices/${id}`, { method: "PATCH", ...json(payload) }),
+  deleteNotice: (id: number) =>
+    request<{ detail: string }>(`/api/notices/${id}`, { method: "DELETE" }),
 
   // ------------------------------------------- controle op verboden paden
   startLegalityCheck: (routeId: number, refresh = false) =>

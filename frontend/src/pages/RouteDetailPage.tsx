@@ -22,6 +22,7 @@ import { notifications } from "@mantine/notifications";
 import {
   IconArrowLeft,
   IconArrowUpRight,
+  IconBarrierBlock,
   IconBike,
   IconBrandStrava,
   IconCalendarPlus,
@@ -42,6 +43,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import Stars from "../components/Stars";
 import StarInput from "../components/StarInput";
 import CommentsSection from "../components/CommentsSection";
+import { NoticeBadges, noticePeriod } from "../components/NoticeBadges";
 import WaterDialog from "../components/WaterDialog";
 import { LegalityResults, useLegalityCheck } from "../components/LegalityCheck";
 import { useAuth } from "../auth/AuthContext";
@@ -543,6 +545,34 @@ export default function RouteDetailPage() {
       </Modal>
 
       <CommentsSection routeId={route.id} />
+
+      {route.notices.length > 0 && (
+        <Card radius="md" withBorder p="lg">
+          <Group gap={8} mb="sm" align="center">
+            <IconBarrierBlock size={20} color="var(--mantine-color-orange-6)" />
+            <Title order={4}>Actieve werkzaamheden</Title>
+          </Group>
+          <Stack gap="md">
+            {route.notices.map((notice) => (
+              <Paper key={notice.id} radius="sm" p="sm" withBorder>
+                <Stack gap={6}>
+                  <NoticeBadges notice={notice} />
+                  <Text fw={600}>{notice.title}</Text>
+                  {notice.description && (
+                    <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                      {notice.description}
+                    </Text>
+                  )}
+                  <Text size="xs" c="dimmed">
+                    {noticePeriod(notice)}
+                    {notice.created_by ? ` · gemeld door ${notice.created_by}` : ""}
+                  </Text>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        </Card>
+      )}
     </Stack>
   );
 }

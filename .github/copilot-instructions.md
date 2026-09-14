@@ -93,9 +93,11 @@ routeboek/
 │       │   ├── social.py             reacties en waarderingen
 │       │   ├── legality.py           controle op verboden paden (achtergrondtaak)
 │       │   ├── community.py          community-routes: import, aanmaken, upvoten
+│       │   ├── notices.py            werkzaamheden/bijzonderheden bij routes
 │       │   └── admin.py              beheer van routes (incl. promoveren) en gebruikers
 │       ├── services/
 │       │   ├── rides.py              ritten-logica los van FastAPI
+│       │   ├── notices.py            meldingen: zichtbaarheid + opruimlus
 │       │   ├── legality.py           OSM-controle op verboden paden
 │       │   └── osm_index.py          lokale wegenkaart (SQLite + R*Tree)
 │       └── water/                    overgenomen uit /home/shark/gpx
@@ -112,12 +114,12 @@ routeboek/
 │       ├── auth/AuthContext.tsx      sessiestatus
 │       ├── components/               AppLayout, AuthShell, Guards, RouteCard,
 │       │                             RouteFilters, RouteMap, Stars, WaterDialog,
-│       │                             LegalityCheck, WeatherStrip
+│       │                             LegalityCheck, WeatherStrip, NoticeBadges
 │       ├── pages/                    Login, Register, ForgotPassword,
 │       │                             ResetPassword, Verify, Routes,
 │       │                             RouteDetail, Rides, RideForm,
 │       │                             CommunityRoutes, NewCommunityRoute,
-│       │                             Admin, Account
+│       │                             Notices, NoticeForm, Admin, Account
 │       ├── theme.ts                  Routeboek-huisstijl
 │       ├── styles.css                huisstijlklassen (.rb-*)
 │       └── main.tsx                  providers + router
@@ -194,6 +196,8 @@ reden; wees vriendelijk voor de bronsite (er zit een `--delay`).
   route/gebruiker (`Route.upvote_count` is de teller)
 - `route_favorites` — favorietmarkering per lid per route, uniek per paar
 - `route_completions` — afgevinkte ("gereden") routes per lid, uniek per paar
+- `route_notices` / `route_notice_routes` — tijdelijke werkzaamheden en
+  bijzonderheden, gekoppeld aan een of meer routes (zie §8)
 - `rides` — georganiseerde ritten (incl. `telegram_message_id`/
   `telegram_posted_at`/`organizer_reminder_sent_at`, zie §11)
 - `ride_participants` — aanmeldingen (uniek per rit/gebruiker)
@@ -830,6 +834,63 @@ bewust geen aparte "meldingen"-tabel of statusveld (opgelost/genegeerd):
 dit is een lichtgewicht meldpunt, geen ticketsysteem: beheerders handelen
 het verder af per e-mail.
 
+### Werkzaamheden en bijzonderheden
+Naast het permanente "Route melden" hierboven (een mail aan de beheerders)
+is er een **tijdelijke, voor iedereen zichtbare** melding: wegwerkzaamheden,
+een gevaarlijke situatie of een andere bijzonderheid die over een paar weken
+vanzelf weer voorbij is. Eigen overzicht op `/werkzaamheden`
+(`NoticesPage.tsx`, menu-item "Werkzaamheden"), plus een vak **"Actieve
+werkzaamheden"** helemaal onderaan de routedetailpagina (ná de reacties).
+
+- **Datamodel**: `RouteNotice` (`route_notices`) met `kind` (`NoticeKind`:
+  `works`/`hazard`/`info`), titel, toelichting, `start_date`, `end_date` en
+  `created_by_id`. De koppeling aan routes loopt via de platte
+  associatietabel `route_notice_routes` (`sa.Table` +
+  `relationship(secondary=…)`), niet via een associatie-object zoals
+  `RideParticipant`: er hoort geen extra gegeven bij de koppeling zelf.
+  Beide FK's staan op `ondelete=CASCADE`.
+- **Minstens één route is verplicht**, afgedwongen in `NoticeCreateIn`
+  (`route_ids` met `min_length=1`) en in `_apply_routes()` — niet in de
+  database. Een melding zonder route zou nergens opduiken waar hij ertoe
+  doet. `resolve_routes()` is bewust origin-agnostisch: een melding mag net
+  zo goed op een community- of event-route slaan.
+- **Verlopen gaat in twee lagen, en dat is expres dubbelop** (zie de
+  docstring van `app/services/notices.py`):
+  1. **Filteren op leestijd** — `visible_query()`/`for_route()` laten alles
+     met `end_date < vandaag` weg, en `_load_notice()` geeft voor zo'n
+     melding een `404`. Een melding is dus meteen weg zodra de dag om is,
+     niet pas na de nachtelijke ronde.
+  2. **Definitief opruimen** — `start_cleanup_loop()` (gestart vanuit
+     `main.py`'s `lifespan()`, zelfde achtergrondthread-patroon als
+     `services/route_ratings.py` met een `_last_run_date`-guard) verwijdert
+     rond 03:00 de verlopen rijen écht. Er is bewust **geen archief**: wie
+     een melding langer nodig heeft, verlengt de einddatum zolang hij nog
+     leeft.
+- **Actief versus gepland**: `start_date <= vandaag <= end_date` is actief,
+  een startdatum in de toekomst is "gepland". Beide staan in hetzelfde vak
+  en dezelfde lijst; het verschil is alleen een grijze "Gepland"-badge. Zo
+  ziet iemand die een rit voor volgende week plant ze toch.
+- **Rechten**: elk ingelogd lid mag een melding aanmaken; bewerken en
+  verwijderen mag alleen de melder zelf of een beheerder (`can_edit()` in de
+  servicelaag, `can_edit` op `NoticeOut` — géén frontend-logica op basis van
+  namen of ID's, zelfde patroon als `RouteSummary.can_delete`).
+- **`RouteDetail` heeft `notices`, `RouteSummary` niet.** `route_detail()`
+  laadt ze mee via `notice_service.for_route()`; `to_summary()` doet dat
+  bewust níet, want het routeoverzicht toont 24 kaarten per pagina en dat
+  zou een N+1 opleveren (zelfde afweging als bij `submitted_by`). Om
+  dezelfde reden is er **geen waarschuwingsbadge op de routekaart** in het
+  overzicht.
+- **`Route` heeft geen `notices`-backref**, zodat een lijstquery niet per
+  ongeluk meldingen gaat ophalen.
+- Frontend: `components/NoticeBadges.tsx` bevat de gedeelde soort-badge en de
+  `noticePeriod()`-tekst, zodat het overzicht en het vak op de routepagina
+  niet uiteenlopen (en een pagina geen andere pagina hoeft te importeren).
+  `NoticeFormPage.tsx` doet aanmaken én bewerken; let op de
+  `DateInput`-conventie (`"YYYY-MM-DD"`-strings, geen `Date`-objecten).
+- **Geen mail- of Telegram-notificatie** bij een nieuwe melding — bewust
+  buiten scope. De logica staat los van FastAPI, dus dat kan later zonder
+  de router aan te raken.
+
 ### Favorieten en gereden routes
 Elk lid kan een route als **favoriet** markeren en afvinken als **gereden**.
 Twee losse tabellen (`route_favorites`, `route_completions`), allebei
@@ -1074,7 +1135,7 @@ paar kernverschillen:
   `RouteDetailPage`), zodat de hoofdbundel klein blijft.
 - Routes in de router zijn Nederlandstalig (`/inloggen`, `/registreren`,
   `/wachtwoord-vergeten`, `/wachtwoord-herstellen`, `/verifieren`, `/routes`,
-  `/ritten`, `/beheer`, `/account`, `/informatie`). De e-maillinks in
+  `/ritten`, `/werkzaamheden`, `/beheer`, `/account`, `/informatie`). De e-maillinks in
   `routers/auth.py` verwijzen naar `/verifieren` en `/wachtwoord-herstellen`
   — pas ze samen aan.
 

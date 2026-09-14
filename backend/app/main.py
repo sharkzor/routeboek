@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.services import notices as notice_service
 from app.services import osm_index
 from app.services import route_ratings
 from app.services import telegram as telegram_service
@@ -20,6 +21,7 @@ from app.routers import (
     community,
     events,
     legality,
+    notices,
     rides,
     routes,
     social,
@@ -53,6 +55,8 @@ async def lifespan(app: FastAPI):
     # gisteren, met het verzoek de gereden route te beoordelen (idempotent,
     # zie services/route_ratings.py).
     route_ratings.start_rating_request_loop()
+    # Ruimt 's nachts verlopen werkzaamheden/bijzonderheden definitief op.
+    notice_service.start_cleanup_loop()
     logger.info("%s gestart op poort %s", settings.app_name, settings.port)
     yield
 
@@ -109,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(community.router)
     app.include_router(rides.router)
     app.include_router(events.router)
+    app.include_router(notices.router)
     app.include_router(water.router)
     app.include_router(admin.router)
     app.include_router(telegram.router)

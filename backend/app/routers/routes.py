@@ -29,7 +29,9 @@ from app.models import (
     User,
 )
 from app.route_thumbnail import render_route_thumbnail_png
-from app.schemas import QuickstartOut, RouteDetail, RoutePage, RouteSummary
+from app.routers.notices import notice_out
+from app.schemas import NoticeOut, QuickstartOut, RouteDetail, RoutePage, RouteSummary
+from app.services import notices as notice_service
 from app.services import weather as weather_service
 from app.water.processing import build_gpx_from_coordinates
 
@@ -393,6 +395,7 @@ def to_detail(
     viewer: User | None = None,
     is_favorite: bool = False,
     is_ridden: bool = False,
+    notices: list[NoticeOut] | None = None,
 ) -> RouteDetail:
     summary = to_summary(
         route,
@@ -409,6 +412,7 @@ def to_detail(
         coordinates=route.coordinates or [],
         created_at=route.created_at,
         my_rating=my_rating,
+        notices=notices or [],
     )
 
 
@@ -449,6 +453,9 @@ def route_detail(
         viewer=user,
         is_favorite=route.id in favorites,
         is_ridden=route.id in ridden_ids,
+        notices=[
+            notice_out(n, user) for n in notice_service.for_route(db, route.id)
+        ],
     )
 
 

@@ -9,6 +9,7 @@ from datetime import date, datetime, time, timezone
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Column,
     Date,
     DateTime,
     Enum,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Table,
     Text,
     Time,
     UniqueConstraint,
@@ -88,6 +90,17 @@ class TokenPurpose(str, enum.Enum):
     #: Koppelt een Telegram-account aan een clublid (zie app/services/telegram.py).
     #: Geen e-mail nodig; dit hergebruikt gewoon dezelfde eenmalige-tokenlogica.
     telegram_link = "telegram_link"
+
+
+class NoticeKind(str, enum.Enum):
+    """Soort tijdelijke melding bij een route (zie RouteNotice)."""
+
+    #: Wegwerkzaamheden, opgebroken straat, omleiding.
+    works = "works"
+    #: Gevaarlijke situatie: losse stenen, kapot wegdek, gevaarlijk kruispunt.
+    hazard = "hazard"
+    #: Overige bijzonderheid: evenement, markt, tijdelijk afgesloten brug.
+    info = "info"
 
 
 class User(Base):
@@ -538,4 +551,50 @@ class RouteCompletion(Base):
 
     __table_args__ = (
         UniqueConstraint("route_id", "user_id", name="uq_route_completion_user"),
+    )
+
+
+# Koppeling tussen een melding en de routes waarop die van toepassing is.
+# Bewust een platte associatietabel (geen associatie-object zoals
+# RideParticipant): er hoort geen extra gegeven bij de koppeling zelf.
+route_notice_routes = Table(
+    "route_notice_routes",
+    Base.metadata,
+    Column("notice_id", ForeignKey("route_notices.id", ondelete="CASCADE"), primary_key=True),
+    Column("route_id", ForeignKey("routes.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class RouteNotice(Base):
+    """Tijdelijke melding (werkzaamheden, gevaar, bijzonderheid) bij routes.
+
+    Loopt af op `end_date`: vanaf de dag daarna wordt de melding nergens meer
+    getoond en ruimt de achtergrondlus in `app/services/notices.py` hem
+    definitief op. Er is bewust geen archief — een melding die langer nodig is,
+    krijgt gewoon een latere einddatum.
+    """
+
+    __tablename__ = "route_notices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[NoticeKind] = mapped_column(
+        Enum(NoticeKind, name="notice_kind"), default=NoticeKind.works, nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+    created_by: Mapped[User | None] = relationship()
+    # Minstens één route; wordt afgedwongen in het schema, niet in de database.
+    routes: Mapped[list[Route]] = relationship(
+        secondary=route_notice_routes, lazy="selectin", order_by="Route.name"
     )

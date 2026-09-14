@@ -13,6 +13,7 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
+  IconBarrierBlock,
   IconBike,
   IconFlag,
   IconInfoCircle,
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { to: "/", label: "Routes", icon: IconMap2 },
   { to: "/ritten", label: "Ritten", icon: IconBike },
   { to: "/events", label: "Events", icon: IconFlag },
+  { to: "/werkzaamheden", label: "Werkzaamheden", icon: IconBarrierBlock },
   { to: "/community", label: "Community", icon: IconUsers },
   { to: "/informatie", label: "Informatie", icon: IconInfoCircle },
 ];
