@@ -47,7 +47,9 @@ Productie: <https://routeboek.unencrypted.nl>
   twee-staps-wizard (optioneel met TCX-upload en een Strava-/Komoot-link),
   met een eigen overzicht (filters + sortering op meeste stemmen); admins
   kunnen een inzending promoveren naar het officiële routeboek, de aanbieder
-  (of een admin) kan 'm ook weer intrekken
+  (of een admin) kan 'm ook weer intrekken. Bij het aanleveren staan de
+  voorwaarden duidelijk vermeld: start en eindig bij Maximus, rijd 'm vooraf
+  zelf uit en zorg dat er geen illegale paden in zitten
 - Reacties en waarderingen per route (gewogen met de historische
   routeboek.cc-waardering), **favorieten** en **"gereden"-markering** per lid
 - Automatisch gegenereerde kaartminiatuur (OSM-achtergrond + routelijn) voor

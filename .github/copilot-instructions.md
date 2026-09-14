@@ -864,6 +864,16 @@ niets meer dan `origin` terugzetten op `"official"`
   metadata aanvullen (naam, beschrijving, soort, windrichting, categorieën,
   optioneel een Strava- én/of Komoot-link als losse referentie, en optioneel
   een TCX-bestand) en slaat pas dan de route op (`POST /api/community/routes`).
+- **Voorwaarden zichtbaar vóór het aanleveren**: `NewCommunityRoutePage.tsx`
+  toont bovenaan een `Alert` ("Voorwaarden voor een nieuwe route") met de
+  drie eisen die de club aan een community-route stelt — start/eindigt bij
+  Maximus, vooraf zelf uitgereden, geen illegale paden (met een verwijzing
+  naar de bestaande "Controleer op verboden paden"-knop om dat laatste na te
+  gaan). Dezelfde voorwaarden staan als korte tekst bij "Eigen route" in
+  `RideFormPage.tsx` (zie hieronder), want ook die flow maakt een
+  `origin=community`-route aan. Puur informatief, er is geen serverside
+  validatie op deze punten — niet af te dwingen zonder de route zelf te
+  bezoeken en te beoordelen.
 - **TCX is een apart upload-endpoint, geen onderdeel van de aanmaak-POST.**
   Anders dan bij officiële routes wordt bij het aanmaken van een
   community-route bewust geen fysiek GPX-bestand weggeschreven (`coordinates`

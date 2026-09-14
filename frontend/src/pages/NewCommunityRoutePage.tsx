@@ -16,7 +16,7 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconArrowUpRight, IconBike, IconUpload } from "@tabler/icons-react";
+import { IconArrowUpRight, IconBike, IconInfoCircle, IconUpload } from "@tabler/icons-react";
 import { useNavigate } from "react-router";
 
 import { ApiError, api } from "../api/client";
@@ -126,6 +126,28 @@ export default function NewCommunityRoutePage() {
           naar het officiële routeboek.
         </Text>
       </Stack>
+
+      <Alert
+        color="routeboek"
+        variant="light"
+        icon={<IconInfoCircle size={18} />}
+        title="Voorwaarden voor een nieuwe route"
+      >
+        <Stack gap={4}>
+          <Text size="sm">
+            Lever alleen een route aan die aan deze voorwaarden voldoet:
+          </Text>
+          <Text size="sm" component="ul" pl="md" m={0}>
+            <li>De route start én eindigt bij Maximus.</li>
+            <li>De route is vooraf zelf uitgereden.</li>
+            <li>
+              De route bevat geen illegale paden; controleer dit vooraf zelf,
+              of gebruik na het aanleveren de knop "Controleer op verboden
+              paden" op de routepagina.
+            </li>
+          </Text>
+        </Stack>
+      </Alert>
 
       <Card withBorder radius="md" p="lg">
         <Stepper active={step} color="routeboek" onStepClick={setStep} allowNextStepsSelect={false}>

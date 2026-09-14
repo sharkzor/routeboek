@@ -368,6 +368,12 @@ export default function RideFormPage() {
                   komt daarna ook in het community-routeboek te staan, net
                   als wanneer je 'm daar los had aangeleverd.
                 </Text>
+                <Text size="xs" c="dimmed">
+                  Voorwaarden: de route start én eindigt bij Maximus, is
+                  vooraf zelf uitgereden en bevat geen illegale paden
+                  (controleer dit na het opslaan desgewenst met "Controleer op
+                  verboden paden" op de routepagina).
+                </Text>
                 <FileInput
                   label="GPX-bestand (optioneel)"
                   placeholder={uploaded ? uploaded.name : "Kies een .gpx-bestand"}
