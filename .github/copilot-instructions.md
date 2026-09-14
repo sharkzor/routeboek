@@ -18,6 +18,10 @@ verwijderen, gebruikersbeheer). Het beheerdersaccount `r.vloothuis@gmail.com`
 bestaat met een willekeurig wachtwoord: gebruik eenmalig "wachtwoord
 vergeten" om er zelf één in te stellen.
 
+Op deze draaiende installatie is de setup al voltooid (`setup_completed`
+staat in `app_settings`), dus `/setup` geeft daar een `409`. De wizard is
+alleen bedoeld voor een verse omgeving; zie §12.
+
 ---
 
 ## 1. Taal- en stijlafspraken
@@ -1167,7 +1171,17 @@ sudo docker compose logs -f app
 
 # databaseshell
 sudo docker exec -e PGPASSWORD=... routeboek-db psql -U routeboek -d routeboek
+
+# handmatige backup buiten de UI om (komt in data/backups/)
+sudo docker compose exec app python -c \
+  "from app.services import backup; print(backup.create_backup('manual').name)"
 ```
+
+**Verse installatie** (lege database): het entrypoint draait de migraties,
+waarna de app een setup-token in de logs zet. Ga naar `/setup`, plak het
+token en maak een beheerdersaccount aan — of zet daar meteen een backup van
+een andere server terug. Zie §12; de uitgeschreven stappen staan in de
+`README.md`.
 
 - Docker vereist op deze server `sudo`.
 - Poort 8083 is gekozen omdat 8080, 8081, 8082, 8085, 8090, 8096 en 8106 al
