@@ -732,6 +732,28 @@ waar fietsen niet (zonder meer) mag. Alleen bedoeld voor Nederland.
   gewoon trainingsrondje vier "overtredingen" die er geen waren. Verder moet
   een melding minstens 35 m lang zijn en uit 3 monsters bestaan.
   `highway=footway` met `footway=sidewalk|crossing` wordt nooit gemeld.
+- **Maar diezelfde onderdrukking versnippert een lange overtreding**, en dat
+  moet `_merge_runs()` weer repareren. Langs een dijk of polderweg ligt om de
+  paar honderd meter een inrit (`service`), een landbouwpad (`track`) of een
+  kort stuk dat in OSM net anders getagd is; elk daarvan onderdrukt een paar
+  monsters en breekt de reeks. "Rondje heuvelrug" (route 22) leverde daardoor
+  **zeven** meldingen op voor wat in werkelijkheid één verboden dijk van 8 km
+  is — de gaten ertussen waren 80 tot 300 m. Opeenvolgende reeksen met
+  dezelfde `severity` én `code` worden daarom samengevoegd zodra het gat
+  kleiner is dan `MERGE_GAP_M` (250 m); route 22 gaat zo naar twee meldingen.
+  Dat het er twee blijven en niet één, is juist correct: daartussen loopt de
+  Lekdijk 300 m door de bebouwde kom als `residential`, waar fietsen wél mag.
+  Die 250 m is dus bewust gekozen: ruim genoeg voor inritten en kruisingen,
+  te klein om twee echt losse overtredingen aan elkaar te plakken. Gemeten op
+  acht routes verandert er buiten route 22 **niets**.
+- **Het gat wordt meegetekend, niet weggelaten.** Een samengevoegde melding
+  bevat ook de monsters uit de tussenstukjes, zodat de rode lijn de route
+  netjes blijft volgen in plaats van in fragmenten uiteen te vallen; de
+  gerapporteerde lengte hoort dus bij de getekende lijn. `_verdict_of()` slaat
+  daarom expliciet niet-gemarkeerde monsters over. `way_name` toont na het
+  samenvoegen alle betrokken straatnamen ("Lekdijk, Rijndijk"), want een lange
+  dijk is in OSM zelden één way; de OSM-link in de popup wijst naar de way van
+  het zwaarst wegende monster.
 - **Gebruik altijd de fijnste geometrie.** `_route_points()` neemt het
   GPX-bestand als dat er is en valt alleen anders terug op
   `Route.coordinates`. Met de GPX verdwenen alle valse meldingen van de

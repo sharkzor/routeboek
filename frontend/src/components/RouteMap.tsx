@@ -5,6 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import type { LegalitySegment, WaterPoint } from "../api/types";
+import { formatLength } from "./LegalityCheck";
 
 /** Leaflet zoekt zijn marker-iconen standaard naast de CSS; dat werkt niet met Vite. */
 const waterIcon = L.divIcon({
@@ -100,8 +101,9 @@ export default function RouteMap({
           <Popup>
             <strong>{segment.label}</strong>
             <br />
-            Op {segment.start_km.toFixed(1)}-{segment.end_km.toFixed(1)} km ·{" "}
-            {Math.round(segment.length_m)} m
+            Op {segment.start_km.toFixed(1).replace(".", ",")}-
+            {segment.end_km.toFixed(1).replace(".", ",")} km ·{" "}
+            {formatLength(segment.length_m)}
             {segment.way_name && (
               <>
                 <br />
@@ -116,7 +118,7 @@ export default function RouteMap({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Bekijk op OpenStreetMap
+                  Bekijk deze weg op OpenStreetMap
                 </a>
               </>
             )}

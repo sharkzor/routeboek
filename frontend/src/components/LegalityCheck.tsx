@@ -7,6 +7,12 @@ import type { LegalityReport, LegalityStatus } from "../api/types";
 
 const POLL_INTERVAL_MS = 2000;
 
+/** Meters onder de kilometer, daarboven kilometers: "480 m" / "3,8 km". */
+export function formatLength(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1).replace(".", ",")} km`;
+}
+
 /**
  * Controle op verboden paden: starten en de voortgang volgen.
  *
@@ -168,8 +174,9 @@ export function LegalityResults({
                 <SegmentBadge severity={segment.severity} />
                 <Text size="sm">
                   <strong>{segment.label}</strong>
-                  {segment.way_name ? ` (${segment.way_name})` : ""} — op{" "}
-                  {segment.start_km.toFixed(1)} km, {Math.round(segment.length_m)} m lang
+                  {segment.way_name ? ` (${segment.way_name})` : ""} — vanaf{" "}
+                  {segment.start_km.toFixed(1).replace(".", ",")} km,{" "}
+                  {formatLength(segment.length_m)} lang
                 </Text>
               </Group>
             </List.Item>

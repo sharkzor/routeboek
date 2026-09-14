@@ -81,8 +81,22 @@ MIN_SEGMENT_POINTS = 3
 #: Zoveel schone monsters mogen een segment onderbreken zonder het te splitsen.
 GAP_TOLERANCE = 2
 
+#: Twee meldingen met dezelfde reden die minder dan zoveel meter uit elkaar
+#: liggen, worden tot één melding samengevoegd.
+#:
+#: Dit is nodig omdat `ALLOWED_NEARBY_M` een doorlopende overtreding aan
+#: flarden schiet: langs een dijk of polderweg ligt om de paar honderd meter
+#: een inrit (`service`), een landbouwpad (`track`) of een kort stuk dat in OSM
+#: net anders getagd is. Elk daarvan onderdrukt een handvol monsters, waardoor
+#: één verboden dijk van 8 km als zeven losse meldingen in de lijst kwam. Zie
+#: `_merge_runs()`.
+#:
+#: 250 m is ruim genoeg voor inritten en kruisingen, maar klein genoeg om twee
+#: echt losse overtredingen niet aan elkaar te plakken.
+MERGE_GAP_M = 250.0
+
 #: Ophogen zodra de regels of de tegelquery wijzigen; verouderde cache vervalt.
-RULESET_VERSION = 3
+RULESET_VERSION = 4
 
 # -- Regels ------------------------------------------------------------------
 
@@ -337,12 +351,83 @@ def _runs(
     return keep
 
 
+def _verdict_of(
+    run: Sequence[int],
+    flagged: dict[int, tuple[float, Way, tuple[str, str, str]]],
+) -> tuple[float, Way, tuple[str, str, str]]:
+    """De zwaarste reden binnen een reeks; verboden weegt zwaarder dan let-op.
+
+    Slaat niet-gemarkeerde monsters over: na `_merge_runs()` bevat een reeks ook
+    de schone tussenstukjes.
+    """
+    return max(
+        (flagged[i] for i in run if i in flagged),
+        key=lambda item: (item[2][0] == "forbidden", -item[0]),
+    )
+
+
+def _merge_runs(
+    runs: list[list[int]],
+    flagged: dict[int, tuple[float, Way, tuple[str, str, str]]],
+    samples: Sequence[tuple[float, float, float]],
+) -> list[list[int]]:
+    """Plak reeksen met dezelfde reden aan elkaar als ze vlak bij elkaar liggen.
+
+    Zonder deze stap valt één doorlopende overtreding uiteen in losse meldingen,
+    doordat elke inrit of zijweg langs de route een paar monsters onderdrukt
+    (zie `MERGE_GAP_M`). Het gat tussen twee reeksen wordt mee opgenomen in de
+    melding: dat stukje ligt op dezelfde weg, dus de lijn op de kaart blijft de
+    route netjes volgen in plaats van los te breken in fragmenten.
+    """
+    if len(runs) < 2:
+        return runs
+
+    merged: list[list[int]] = [runs[0]]
+    for run in runs[1:]:
+        previous = merged[-1]
+        gap_m = (samples[run[0]][2] - samples[previous[-1]][2]) * 1000.0
+        _, _, (severity, code, _) = _verdict_of(previous, flagged)
+        _, _, (next_severity, next_code, _) = _verdict_of(run, flagged)
+        if gap_m <= MERGE_GAP_M and (severity, code) == (next_severity, next_code):
+            # De monsters in het gat zijn zelf niet gemarkeerd, maar horen wel
+            # bij het getekende stuk; vandaar het volledige bereik.
+            merged[-1] = list(range(previous[0], run[-1] + 1))
+        else:
+            merged.append(run)
+    return merged
+
+
+def _way_label(
+    run: Sequence[int],
+    flagged: dict[int, tuple[float, Way, tuple[str, str, str]]],
+) -> str | None:
+    """Alle straatnamen binnen een melding, in volgorde van voorkomen.
+
+    Na het samenvoegen beslaat een melding vaak meerdere OSM-ways — een lange
+    dijk is daar zelden één object. "Lekdijk, Rijndijk" is dan informatiever
+    dan alleen de naam van het toevallig eerste stuk.
+    """
+    names: list[str] = []
+    for index in run:
+        entry = flagged.get(index)
+        if entry is None:
+            continue
+        name = entry[1].tags.get("name")
+        if name and name not in names:
+            names.append(name)
+    if not names:
+        return None
+    if len(names) > 3:
+        return f"{', '.join(names[:3])} e.a."
+    return ", ".join(names)
+
+
 def _to_segments(
     flagged: dict[int, tuple[float, Way, tuple[str, str, str]]],
     samples: Sequence[tuple[float, float, float]],
 ) -> list[Segment]:
     segments: list[Segment] = []
-    for run in _runs(flagged, samples):
+    for run in _merge_runs(_runs(flagged, samples), flagged, samples):
         first, last = run[0], run[-1]
         coords = [(samples[i][0], samples[i][1]) for i in range(first, last + 1)]
         length = sum(
@@ -350,17 +435,14 @@ def _to_segments(
             for i in range(len(coords) - 1)
         )
         # De zwaarste reden binnen het segment bepaalt het oordeel.
-        _, way, (severity, code, label) = max(
-            (flagged[i] for i in run),
-            key=lambda item: (item[2][0] == "forbidden", -item[0]),
-        )
+        _, way, (severity, code, label) = _verdict_of(run, flagged)
         segments.append(
             Segment(
                 severity=severity,
                 code=code,
                 label=label,
                 way_id=way.id,
-                way_name=way.tags.get("name"),
+                way_name=_way_label(run, flagged),
                 highway=way.tags.get("highway"),
                 start_km=round(samples[first][2], 2),
                 end_km=round(samples[last][2], 2),
